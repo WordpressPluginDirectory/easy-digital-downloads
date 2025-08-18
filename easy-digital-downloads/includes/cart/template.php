@@ -20,7 +20,7 @@ defined( 'ABSPATH' ) || exit;
  */
 function edd_checkout_cart() {
 
-	if ( function_exists( '\\EDD\\Blocks\\Checkout\\Functions\\checkout_has_blocks' ) && \EDD\Blocks\Checkout\Functions\checkout_has_blocks() ) {
+	if ( EDD\Checkout\Validator::has_block() ) {
 		$cart_items = edd_get_cart_contents();
 		include EDD_BLOCKS_DIR . 'views/checkout/cart/cart.php';
 
@@ -88,7 +88,7 @@ function edd_get_cart_item_template( $cart_key, $item, $ajax = false ) {
 	$id = is_array( $item ) ? $item['id'] : $item;
 
 	$remove_url = edd_remove_item_url( $cart_key );
-	$title      = get_the_title( $id );
+	$title      = sanitize_text_field( get_the_title( $id ) );
 	$options    = ! empty( $item['options'] ) ? $item['options'] : array();
 	$quantity   = edd_get_cart_item_quantity( $id, $options );
 	$price      = edd_get_cart_item_price( $id, $options );
@@ -127,7 +127,21 @@ function edd_get_cart_item_template( $cart_key, $item, $ajax = false ) {
  * @return string Cart is empty message
  */
 function edd_empty_cart_message() {
-	return apply_filters( 'edd_empty_cart_message', '<span class="edd_empty_cart">' . __( 'Your cart is empty.', 'easy-digital-downloads' ) . '</span>' );
+	return '<span class="edd_empty_cart">' .
+		do_shortcode(
+			/**
+			 * Filters the empty cart message.
+			 *
+			 * @since 1.1.4.1
+			 * @param string $message The empty cart message.
+			 * @return string The filtered empty cart message.
+			 */
+			apply_filters(
+				'edd_empty_cart_message',
+				edd_get_option( 'empty_cart_message', __( 'Your cart is empty.', 'easy-digital-downloads' ) )
+			)
+		) .
+	'</span>';
 }
 
 /**
@@ -306,7 +320,7 @@ function edd_show_added_to_cart_messages( $download_id ) {
 		}
 
 		$alert = '<div class="edd_added_to_cart_alert">'
-		// Translators: %s is the name of the download that was added to the cart.
+		// Translators: %s: name of the download that was added to the cart.
 		. sprintf( __( 'You have successfully added %s to your shopping cart.', 'easy-digital-downloads' ), get_the_title( $download_id ) )
 		. ' <a href="' . esc_url( edd_get_checkout_uri() ) . '" class="edd_alert_checkout_link">' . __( 'Checkout.', 'easy-digital-downloads' ) . '</a>'
 		. '</div>';

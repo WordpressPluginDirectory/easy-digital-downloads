@@ -12,7 +12,6 @@ namespace EDD\Database;
 
 use EDD\Models\Notification;
 use EDD\Utils\EnvironmentChecker;
-use EDD\Utils\NotificationImporter;
 
 /**
  * Class NotificationsDB
@@ -26,19 +25,8 @@ class NotificationsDB {
 	 * Constructor
 	 */
 	public function __construct() {
-		add_action( 'edd_daily_scheduled_events', array( $this, 'schedule_daily_notification_checks' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 		add_filter( 'script_loader_tag', array( $this, 'defer_alpine' ) );
-	}
-
-	/**
-	 * Add a cron event to check for new notifications.
-	 *
-	 * @since 2.11.4
-	 */
-	public static function schedule_daily_notification_checks() {
-		$importer = new NotificationImporter();
-		$importer->run();
 	}
 
 	/**
@@ -105,8 +93,12 @@ class NotificationsDB {
 		if ( empty( $data['remote_id'] ) || is_numeric( $data['remote_id'] ) ) {
 			return false;
 		}
+
 		// The source is always always local.
 		$data['source'] = 'local';
+
+		// If the remote_id is too long, truncate it to 20 characters.
+		$data['remote_id'] = substr( $data['remote_id'], 0, 20 );
 
 		$existing = $this->get_item_by( 'remote_id', $data['remote_id'] );
 		if ( $existing ) {

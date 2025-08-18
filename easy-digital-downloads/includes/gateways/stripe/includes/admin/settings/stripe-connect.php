@@ -118,9 +118,9 @@ function edds_process_gateway_connect_completion() {
 		'https://easydigitaldownloads.com/?edd_gateway_connect_credentials=stripe_connect'
 	);
 
-	$response = wp_remote_get( esc_url_raw( $edd_credentials_url ) );
+	$request = new \EDD\Utils\RemoteRequest( $edd_credentials_url );
 
-	if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+	if ( is_wp_error( $request->response ) || 200 !== $request->code ) {
 		$message = '<p>' . sprintf(
 			/* translators: %1$s Opening anchor tag, do not translate. %2$s Closing anchor tag, do not translate. */
 			__( 'There was an error getting your Stripe credentials. Please %1$stry again%2$s. If you continue to have this problem, please contact support.', 'easy-digital-downloads' ),
@@ -130,7 +130,7 @@ function edds_process_gateway_connect_completion() {
 		wp_die( $message );
 	}
 
-	$data = json_decode( $response['body'], true );
+	$data = json_decode( $request->response['body'], true );
 	$data = $data['data'];
 
 	if ( edd_is_test_mode() ) {
@@ -146,6 +146,8 @@ function edds_process_gateway_connect_completion() {
 	}
 
 	edd_update_option( 'stripe_connect_account_id', sanitize_text_field( $data['stripe_user_id'] ) );
+
+	\EDD\Gateways\Stripe\PaymentMethods::reset();
 
 	$redirect_url = edd_get_admin_url(
 		array(
@@ -186,6 +188,7 @@ function edds_stripe_connect_disconnect_url() {
 			'tab'                    => 'gateways',
 			'section'                => 'edd-stripe',
 			'edds-stripe-disconnect' => true,
+			'edd-action'             => 'disconnect_stripe_connect',
 		),
 		admin_url( 'edit.php' )
 	);
@@ -202,9 +205,7 @@ function edds_stripe_connect_disconnect_url() {
 		$stripe_connect_disconnect_url
 	);
 
-	$stripe_connect_disconnect_url = wp_nonce_url( $stripe_connect_disconnect_url, 'edds-stripe-connect-disconnect' );
-
-	return $stripe_connect_disconnect_url;
+	return wp_nonce_url( $stripe_connect_disconnect_url, 'edds-stripe-connect-disconnect' );
 }
 
 /**
@@ -239,6 +240,9 @@ function edds_stripe_connect_process_disconnect() {
 		return;
 	}
 
+	// Remove payment method configuration and account capabilities.
+	\EDD\Gateways\Stripe\PaymentMethods::reset();
+
 	$options = array(
 		'stripe_connect_account_id',
 		'stripe_connect_account_country',
@@ -246,6 +250,7 @@ function edds_stripe_connect_process_disconnect() {
 		'test_secret_key',
 		'live_publishable_key',
 		'live_secret_key',
+		'stripe_statement_descriptor_prefix',
 	);
 
 	foreach ( $options as $option ) {
@@ -266,7 +271,7 @@ function edds_stripe_connect_process_disconnect() {
 
 	return wp_redirect( esc_url_raw( $redirect ) );
 }
-add_action( 'admin_init', 'edds_stripe_connect_process_disconnect' );
+add_action( 'edd_disconnect_stripe_connect', 'edds_stripe_connect_process_disconnect' );
 
 /**
  * Updates the `stripe_connect_account_country` setting if using Stripe Connect
@@ -320,95 +325,10 @@ add_action( 'admin_init', 'edds_stripe_connect_maybe_refresh_account_country' );
  * Provides a way to use Stripe Connect and manually manage API keys.
  *
  * @since 2.8.0
+ * @return string
  */
 function edds_stripe_connect_setting_field() {
-	$stripe_connect_url    = edds_stripe_connect_url();
-	$stripe_disconnect_url = edds_stripe_connect_disconnect_url();
-
-	$stripe_connect_account_id = edd_stripe()->connect()->get_connect_id();
-
-	$api_key = edd_is_test_mode()
-		? edd_get_option( 'test_publishable_key' )
-		: edd_get_option( 'live_publishable_key' );
-
-	ob_start();
-	?>
-
-	<?php if ( empty( $api_key ) ) : ?>
-
-	<a href="<?php echo esc_url( $stripe_connect_url ); ?>" class="edd-stripe-connect">
-		<span><?php esc_html_e( 'Connect with Stripe', 'easy-digital-downloads' ); ?></span>
-	</a>
-
-	<p>
-		<?php
-		echo wp_kses_post( edd_stripe()->application_fee->get_fee_message() );
-		echo wp_kses(
-			sprintf(
-				/* translators: %1$s Opening anchor tag, do not translate. %2$s Closing anchor tag, do not translate. */
-				__( 'Have questions about connecting with Stripe? See the %1$sdocumentation%2$s.', 'easy-digital-downloads' ),
-				'<a href="' . esc_url( edds_documentation_route( 'stripe' ) ) . '" target="_blank" rel="noopener noreferrer">',
-				'</a>'
-			),
-			array(
-				'a' => array(
-					'href'   => true,
-					'target' => true,
-					'rel'    => true,
-				),
-			)
-		);
-		?>
-	</p>
-
-	<?php endif; ?>
-
-	<?php if ( ! empty( $api_key ) ) : ?>
-
-	<div
-		id="edds-stripe-connect-account"
-		class="edds-stripe-connect-acount-info notice inline"
-		data-account-id="<?php echo esc_attr( $stripe_connect_account_id ); ?>"
-		data-nonce="<?php echo wp_create_nonce( 'edds-stripe-connect-account-information' ); ?>"
-		<?php echo ( ! empty( $_GET['page'] ) && 'edd-onboarding-wizard' === $_GET['page'] ) ? ' data-onboarding-wizard="true"' : ''; ?>>
-		<p><span class="spinner is-active"></span>
-		<em><?php esc_html_e( 'Retrieving account information...', 'easy-digital-downloads' ); ?></em>
-	</div>
-	<div id="edds-stripe-disconnect-reconnect">
-	</div>
-
-	<?php endif; ?>
-
-	<?php if ( true === edds_stripe_connect_can_manage_keys() ) : ?>
-
-	<div class="edds-api-key-toggle">
-		<p>
-			<button type="button" class="button-link">
-				<small>
-					<?php esc_html_e( 'Manage API keys manually', 'easy-digital-downloads' ); ?>
-				</small>
-			</button>
-		</p>
-	</div>
-
-	<div class="edds-api-key-toggle edd-hidden">
-		<p>
-			<button type="button" class="button-link">
-				<small>
-					<?php esc_html_e( 'Hide API keys', 'easy-digital-downloads' ); ?>
-				</small>
-			</button>
-		</p>
-
-		<div class="notice inline notice-warning" style="margin: 15px 0 -10px;">
-			<?php echo wpautop( esc_html__( 'Although you can add your API keys manually, we recommend using Stripe Connect: an easier and more secure way of connecting your Stripe account to your website. Stripe Connect prevents issues that can arise when copying and pasting account details from Stripe into your Easy Digital Downloads payment gateway settings. With Stripe Connect you\'ll be ready to go with just a few clicks.', 'easy-digital-downloads' ) ); ?>
-		</div>
-	</div>
-
-	<?php endif; ?>
-
-	<?php
-	return ob_get_clean();
+	return EDD\Gateways\Stripe\Admin\Connect::render_connect_field();
 }
 
 /**
@@ -487,7 +407,7 @@ function edds_stripe_connect_account_info_ajax_response() {
 				) . ' ' .
 				'<br /><br />' .
 				sprintf(
-					/* translators: %1$s Opening anchor tag for disconnecting Stripe, do not translate. %2$s Closing anchor tag, do not translate. */
+					/* translators: 1: Opening anchor tag for disconnecting Stripe, do not translate. 2: Closing anchor tag, do not translate. */
 					__( '%1$sDisconnect this account%2$s.', 'easy-digital-downloads' ),
 					'<a href="' . esc_url( edds_stripe_connect_disconnect_url() ) . '">',
 					'</a>'
@@ -536,7 +456,7 @@ function edds_stripe_connect_account_info_ajax_response() {
 			}
 
 			if ( ! empty( $display_name ) ) {
-				$display_name = '<strong>' . $display_name . '</strong><br/ >';
+				$display_name = '<span class="display-name">' . $display_name . '</span>';
 			}
 
 			if ( ! empty( $email ) ) {
@@ -556,18 +476,40 @@ function edds_stripe_connect_account_info_ajax_response() {
 				? wpautop( $show_fee_message )
 				: '';
 
+			$message = sprintf(
+				'<span class="display-name">%1$s</span><span class="info">%2$s %3$s %4$s</span>',
+				$display_name,
+				$email,
+				esc_html__( 'Administrator (Owner)', 'easy-digital-downloads' ),
+				$fee_message
+			);
+
+			/**
+			 * If we have a statement descriptor prefix in the account settings, save it so we can use it later.
+			 *
+			 * Saving it now ensures that if someone visits the Stripe settings page, it is updated.
+			 */
+			if ( isset( $account->settings->card_payments->statement_descriptor_prefix ) ) {
+				edd_update_option( 'stripe_statement_descriptor_prefix', sanitize_text_field( $account->settings->card_payments->statement_descriptor_prefix ) );
+			}
+
+			$webhooks = EDD\Gateways\Stripe\Admin\Connect::check_webhooks();
+			if ( $webhooks ) {
+				$message .= '<br /><br />' . $webhooks;
+			}
+
 			// Return a message with name, email, and reconnect/disconnect actions.
 			return wp_send_json_success(
 				array(
 					'message' => wpautop(
-						// $display_name is already escaped
-						$display_name . esc_html( $email ) . esc_html__( 'Administrator (Owner)', 'easy-digital-downloads' ) . $fee_message
+						$message
 					),
 					'actions' => $reconnect_disconnect_actions,
 					'status'  => ! empty( $show_fee_message ) ? 'warning' : 'success',
+					'account' => $account,
 				)
 			);
-		} catch ( \Stripe\Exception\AuthenticationException $e ) {
+		} catch ( \EDD\Vendor\Stripe\Exception\AuthenticationException $e ) {
 			// API keys were changed after using Stripe Connect.
 			return wp_send_json_error(
 				array(
@@ -588,6 +530,15 @@ function edds_stripe_connect_account_info_ajax_response() {
 			);
 		} catch ( \Exception $e ) {
 			// General error.
+			$unknown_error['message'] .= ' ' . wpautop(
+				sprintf(
+					/* translators: 1: Opening anchor tag for disconnecting Stripe, do not translate. 2: Closing anchor tag, do not translate. */
+					__( '%1$sDisconnect this account%2$s.', 'easy-digital-downloads' ),
+					'<a href="' . esc_url( edds_stripe_connect_disconnect_url() ) . '">',
+					'</a>'
+				)
+			);
+
 			return wp_send_json_error( $unknown_error );
 		}
 		// Manual API key management.
@@ -676,7 +627,7 @@ function edds_stripe_connect_admin_notices_register() {
 		);
 
 		// Stripe Connect reconnect.
-		/** translators: %s Test mode status. */
+		/* translators: %s Test mode status. */
 		$test_mode_status = edd_is_test_mode()
 			? _x( 'enabled', 'gateway test mode status', 'easy-digital-downloads' )
 			: _x( 'disabled', 'gateway test mode status', 'easy-digital-downloads' );
@@ -749,6 +700,7 @@ function edds_stripe_connect_admin_notices_print() {
 				$notices->output( 'stripe-connect' );
 				// Stripe Connect reconnect.
 			} else {
+				EDD\Gateways\Stripe\PaymentMethods::reset();
 				$notices->output( 'stripe-connect-reconnect' );
 			}
 		}
@@ -757,3 +709,5 @@ function edds_stripe_connect_admin_notices_print() {
 	}
 }
 add_action( 'admin_notices', 'edds_stripe_connect_admin_notices_print' );
+
+add_action( 'edd_create_stripe_webhooks', EDD\Gateways\Stripe\Admin\Connect::class . '::create_webhooks' );

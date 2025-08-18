@@ -159,21 +159,7 @@ add_action( 'edd_purchase_form', 'edd_show_purchase_form' );
  * @return void
  */
 function edd_user_info_fields() {
-	$customer = EDD()->session->get( 'customer' );
-	$customer = wp_parse_args( $customer, array( 'first_name' => '', 'last_name' => '', 'email' => '' ) );
-
-	if ( is_user_logged_in() ) {
-		$user_data = get_userdata( get_current_user_id() );
-		foreach ( $customer as $key => $field ) {
-			if ( 'email' === $key && empty( $field ) ) {
-				$customer[ $key ] = $user_data->user_email;
-			} elseif ( empty( $field ) ) {
-				$customer[ $key ] = $user_data->$key;
-			}
-		}
-	}
-
-	$customer = array_map( 'sanitize_text_field', $customer );
+	$customer = \EDD\Sessions\Customer::get();
 	?>
 	<fieldset id="edd_checkout_user_info">
 		<legend><?php echo apply_filters( 'edd_checkout_personal_info_text', esc_html__( 'Personal info', 'easy-digital-downloads' ) ); ?></legend>
@@ -309,173 +295,41 @@ add_action( 'edd_cc_form', 'edd_get_cc_form' );
  *
  * @since 1.0
  * @since 3.0 Updated to use `edd_get_customer_address()`.
+ * @since 3.3.8 Updated to use `EDD\Checkout\Address`.
  */
 function edd_default_cc_address_fields() {
 	/**
 	 * Allow the address fields to be replaced.
+	 *
 	 * @since 3.1
 	 */
 	if ( null !== apply_filters( 'edd_pre_cc_address_fields', null ) ) {
 		do_action( 'edd_cc_address_fields' );
 		return;
 	}
-	$logged_in = is_user_logged_in();
 
-	$customer = EDD()->session->get( 'customer' );
-
-	$customer = wp_parse_args( $customer, array(
-		'address' => array(
-			'line1'   => '',
-			'line2'   => '',
-			'city'    => '',
-			'zip'     => '',
-			'state'   => '',
-			'country' => '',
-		),
-	) );
-
-	$customer['address'] = array_map( 'sanitize_text_field', $customer['address'] );
-
-	if ( $logged_in ) {
-		$user_address = edd_get_customer_address();
-
-		foreach ( $customer['address'] as $key => $field ) {
-			if ( empty( $field ) && ! empty( $user_address[ $key ] ) ) {
-				$customer['address'][ $key ] = $user_address[ $key ];
-			} else {
-				$customer['address'][ $key ] = '';
-			}
-		}
-	}
-
-	/**
-	 * Filter the billing address details that will be pre-populated on the checkout form..
-	 *
-	 * @since 2.8
-	 *
-	 * @param array $address The customer address.
-	 * @param array $customer The customer data from the session
-	 */
-	$customer['address'] = apply_filters( 'edd_checkout_billing_details_address', $customer['address'], $customer );
-
-	ob_start(); ?>
-	<fieldset id="edd_cc_address" class="cc-address">
-		<legend><?php _e( 'Billing details', 'easy-digital-downloads' ); ?></legend>
-		<?php do_action( 'edd_cc_billing_top' ); ?>
-		<p id="edd-card-address-wrap">
-			<label for="card_address" class="edd-label">
-				<?php _e( 'Billing address', 'easy-digital-downloads' ); ?>
-				<?php if ( edd_field_is_required( 'card_address' ) ) : ?>
-					<span class="edd-required-indicator">*</span>
-				<?php endif; ?>
-			</label>
-			<span class="edd-description"><?php _e( 'The primary billing address for your credit card.', 'easy-digital-downloads' ); ?></span>
-			<input type="text" id="card_address" name="card_address" class="card-address edd-input<?php if ( edd_field_is_required( 'card_address' ) ) { echo ' required'; } ?>" placeholder="<?php _e( 'Address line 1', 'easy-digital-downloads' ); ?>" value="<?php echo esc_attr( $customer['address']['line1'] ); ?>"<?php if( edd_field_is_required( 'card_address' ) ) {  echo ' required '; } ?>/>
-		</p>
-		<p id="edd-card-address-2-wrap">
-			<label for="card_address_2" class="edd-label">
-				<?php _e( 'Billing address line 2 (optional)', 'easy-digital-downloads' ); ?>
-				<?php if( edd_field_is_required( 'card_address_2' ) ) : ?>
-					<span class="edd-required-indicator">*</span>
-				<?php endif; ?>
-			</label>
-			<span class="edd-description"><?php _e( 'The suite, apt no, PO box, etc, associated with your billing address.', 'easy-digital-downloads' ); ?></span>
-			<input type="text" id="card_address_2" name="card_address_2" class="card-address-2 edd-input<?php if ( edd_field_is_required( 'card_address_2' ) ) { echo ' required'; } ?>" placeholder="<?php _e( 'Address line 2', 'easy-digital-downloads' ); ?>" value="<?php echo esc_attr( $customer['address']['line2'] ); ?>"<?php if( edd_field_is_required( 'card_address_2' ) ) {  echo ' required '; } ?>/>
-		</p>
-		<p id="edd-card-city-wrap">
-			<label for="card_city" class="edd-label">
-				<?php _e( 'Billing city', 'easy-digital-downloads' ); ?>
-				<?php if ( edd_field_is_required( 'card_city' ) ) : ?>
-					<span class="edd-required-indicator">*</span>
-				<?php endif; ?>
-			</label>
-			<span class="edd-description"><?php _e( 'The city for your billing address.', 'easy-digital-downloads' ); ?></span>
-			<input type="text" id="card_city" name="card_city" class="card-city edd-input<?php if ( edd_field_is_required( 'card_city' ) ) { echo ' required'; } ?>" placeholder="<?php _e( 'City', 'easy-digital-downloads' ); ?>" value="<?php echo esc_attr( $customer['address']['city'] ); ?>"<?php if( edd_field_is_required( 'card_city' ) ) {  echo ' required '; } ?>/>
-		</p>
-		<p id="edd-card-zip-wrap">
-			<label for="card_zip" class="edd-label">
-				<?php _e( 'Billing zip/Postal code', 'easy-digital-downloads' ); ?>
-				<?php if ( edd_field_is_required( 'card_zip' ) ) : ?>
-					<span class="edd-required-indicator">*</span>
-				<?php endif; ?>
-			</label>
-			<span class="edd-description"><?php _e( 'The zip or postal code for your billing address.', 'easy-digital-downloads' ); ?></span>
-			<input type="text" size="4" id="card_zip" name="card_zip" class="card-zip edd-input<?php if ( edd_field_is_required( 'card_zip' ) ) { echo ' required'; } ?>" placeholder="<?php _e( 'Zip / Postal Code', 'easy-digital-downloads' ); ?>" value="<?php echo esc_attr( $customer['address']['zip'] ); ?>"<?php if ( edd_field_is_required( 'card_zip' ) ) {  echo ' required '; } ?>/>
-		</p>
-		<p id="edd-card-country-wrap">
-			<label for="billing_country" class="edd-label">
-				<?php _e( 'Billing country', 'easy-digital-downloads' ); ?>
-				<?php if ( edd_field_is_required( 'billing_country' ) ) : ?>
-					<span class="edd-required-indicator">*</span>
-				<?php endif; ?>
-			</label>
-			<span class="edd-description"><?php _e( 'The country for your billing address.', 'easy-digital-downloads' ); ?></span>
-			<select name="billing_country" id="billing_country" data-nonce="<?php echo wp_create_nonce( 'edd-country-field-nonce' ); ?>" class="billing_country edd-select<?php if ( edd_field_is_required( 'billing_country' ) ) { echo ' required'; } ?>"<?php if ( edd_field_is_required( 'billing_country' ) ) {  echo ' required '; } ?>>
-				<?php
-				$selected_country = edd_get_shop_country();
-
-				if ( ! empty( $customer['address']['country'] ) && '*' !== $customer['address']['country'] ) {
-					$selected_country = $customer['address']['country'];
-				}
-
-				$countries = edd_get_country_list();
-				foreach ( $countries as $country_code => $country ) {
-					echo '<option value="' . esc_attr( $country_code ) . '"' . selected( $country_code, $selected_country, false ) . '>' . esc_html( $country ) . '</option>';
-				}
-				?>
-			</select>
-		</p>
-		<p id="edd-card-state-wrap">
-			<label for="card_state" class="edd-label">
-				<?php _e( 'Billing state/Province', 'easy-digital-downloads' ); ?>
-				<?php if ( edd_field_is_required( 'card_state' ) ) { ?>
-					<span class="edd-required-indicator">*</span>
-				<?php } ?>
-			</label>
-			<span class="edd-description"><?php _e( 'The state or province for your billing address.', 'easy-digital-downloads' ); ?></span>
-			<?php
-			$selected_state = edd_get_shop_state();
-			$states         = edd_get_shop_states( $selected_country );
-
-			if( ! empty( $customer['address']['state'] ) ) {
-				$selected_state = $customer['address']['state'];
-			}
-
-			if( ! empty( $states ) ) : ?>
-			<select name="card_state" id="card_state" class="card_state edd-select<?php if ( edd_field_is_required( 'card_state' ) ) { echo ' required'; } ?>">
-				<?php
-					foreach( $states as $state_code => $state ) {
-						echo '<option value="' . esc_attr( $state_code ) . '"' . selected( $state_code, $selected_state, false ) . '>' . esc_html( $state ) . '</option>';
-					}
-				?>
-			</select>
-			<?php
-			else :
-				$customer_state = ! empty( $customer['address']['state'] ) ? $customer['address']['state'] : ''; ?>
-			<input type="text" size="6" name="card_state" id="card_state" class="card_state edd-input" value="<?php echo esc_attr( $customer_state ); ?>" placeholder="<?php _e( 'State/Province', 'easy-digital-downloads' ); ?>"/>
-			<?php endif; ?>
-		</p>
-		<?php do_action( 'edd_cc_billing_bottom' ); ?>
-		<?php wp_nonce_field( 'edd-checkout-address-fields', 'edd-checkout-address-fields-nonce', false, true ); ?>
-	</fieldset>
-	<?php
-	echo ob_get_clean();
+	$address           = new EDD\Checkout\Address();
+	$address->is_block = false;
+	$address->render();
 }
 add_action( 'edd_after_cc_fields', 'edd_default_cc_address_fields' );
 
-
 /**
- * Renders the billing address fields for cart taxation.
+ * Renders the billing address fields.
  *
  * @since 1.6
+ * @since 3.3.8 Updated to show the address fields if they are enabled, regardless of taxes.
  */
 function edd_checkout_tax_fields() {
-	if ( edd_cart_needs_tax_address_fields() && edd_get_cart_total() ) {
+	if ( ! edd_get_cart_total() ) {
+		return;
+	}
+
+	if ( edd_cart_needs_tax_address_fields() || ! empty( edd_get_option( 'checkout_address_fields', false ) ) ) {
 		edd_default_cc_address_fields();
 	}
 }
 add_action( 'edd_purchase_form_after_cc_form', 'edd_checkout_tax_fields', 999 );
-
 
 /**
  * Renders the user registration fields. If the user is logged in, a login
@@ -781,7 +635,7 @@ function edd_terms_agreement() {
 	 */
 	if ( edd_get_option( 'show_agree_to_terms', false ) ) {
 
-		$agree_text  = edd_get_option( 'agree_text', '' );
+		$agree_text  = EDD\Settings\Sanitize\Types\RichEditor::sanitize( edd_get_option( 'agree_text', '' ) );
 		$agree_label = edd_get_option( 'agree_label', __( 'Agree to Terms?', 'easy-digital-downloads' ) );
 
 		ob_start();
@@ -834,8 +688,8 @@ add_action( 'edd_purchase_form_before_submit', 'edd_terms_agreement' );
  */
 function edd_privacy_agreement() {
 
-	$show_privacy_policy_checkbox = edd_get_option( 'show_agree_to_privacy_policy', false );
-	$show_privacy_policy_text     = edd_get_option( 'show_privacy_policy_on_checkout', false );
+	$show_privacy_policy_checkbox = (bool) edd_get_option( 'show_agree_to_privacy_policy', false );
+	$show_privacy_policy_text     = (bool) edd_get_option( 'show_privacy_policy_on_checkout', false );
 
 	/**
 	 * Privacy Policy output has dual functionality, unlike Agree to Terms output:
@@ -851,7 +705,7 @@ function edd_privacy_agreement() {
 	 *
 	 * Because these two display options work independently, having either setting checked triggers output.
 	 */
-	if ( '1' === $show_privacy_policy_checkbox || '1' === $show_privacy_policy_text ) {
+	if ( $show_privacy_policy_checkbox || $show_privacy_policy_text ) {
 
 		$agree_label  = edd_get_option( 'privacy_agree_label', __( 'Agree to Privacy Policy?', 'easy-digital-downloads' ) );
 		$privacy_page = get_option( 'wp_page_for_privacy_policy' );
@@ -864,7 +718,7 @@ function edd_privacy_agreement() {
 
 			<?php
 			// Show Privacy Policy text if the setting is checked, the WP Privacy Page is set, and content exists.
-			if ( '1' === $show_privacy_policy_text && ( $privacy_page && ! empty( $privacy_text ) ) ) {
+			if ( $show_privacy_policy_text && ( $privacy_page && ! empty( $privacy_text ) ) ) {
 				?>
 				<div id="edd-privacy-policy" class="edd-terms" style="display:none;">
 					<?php
@@ -883,7 +737,7 @@ function edd_privacy_agreement() {
 			}
 
 			// Show Privacy Policy checkbox and label if the setting is checked.
-			if ( '1' === $show_privacy_policy_checkbox ) {
+			if ( $show_privacy_policy_checkbox ) {
 				?>
 				<div class="edd-privacy-policy-agreement">
 					<input name="edd_agree_to_privacy_policy" class="required" type="checkbox" id="edd-agree-to-privacy-policy" value="1" required/>

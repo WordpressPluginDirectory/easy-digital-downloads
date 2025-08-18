@@ -111,7 +111,7 @@ function edds_has_met_requirements( $requirement = false ) {
  *
  * @param string $object Name of the Stripe object to request.
  * @param string $method Name of the API operation to perform during the request.
- * @param mixed ...$args Additional arguments to pass to the request.
+ * @param mixed  ...$args Additional arguments to pass to the request.
  * @return \EDD\Vendor\Stripe\Stripe\StripeObject
  */
 function edds_api_request( $object, $method, $args = null ) {
@@ -143,6 +143,7 @@ function edds_truthy_to_bool( $truthy_value ) {
 
 /**
  * Retrieve the exsting cards setting.
+ *
  * @return bool
  */
 function edd_stripe_existing_cards_enabled() {
@@ -428,68 +429,6 @@ function edds_is_zero_decimal_currency( $currency = '' ) {
 }
 
 /**
- * Retrieves a sanitized statement descriptor.
- *
- * @since 2.6.19
- *
- * @return string $statement_descriptor Sanitized statement descriptor.
- */
-function edds_get_statement_descriptor() {
-	$statement_descriptor = edd_get_option( 'stripe_statement_descriptor', '' );
-	$statement_descriptor = edds_sanitize_statement_descriptor( $statement_descriptor );
-
-	return $statement_descriptor;
-}
-
-/**
- * Retrieves a list of unsupported characters for Stripe statement descriptors.
- *
- * @since 2.6.19
- *
- * @return array $unsupported_characters List of unsupported characters.
- */
-function edds_get_statement_descriptor_unsupported_characters() {
-	$unsupported_characters = array(
-		'<',
-		'>',
-		'"',
-		'\'',
-		'\\',
-		'*',
-	);
-
-	/**
-	 * Filters the list of unsupported characters for Stripe statement descriptors.
-	 *
-	 * @since 2.6.19
-	 *
-	 * @param array $unsupported_characters List of unsupported characters.
-	 */
-	$unsupported_characters = apply_filters( 'edds_get_statement_descriptor_unsupported_characters', $unsupported_characters );
-
-	return $unsupported_characters;
-}
-
-/**
- * Sanitizes a string to be used for a statement descriptor.
- *
- * @since 2.6.19
- *
- * @link https://stripe.com/docs/connect/statement-descriptors#requirements
- *
- * @param string $statement_descriptor Statement descriptor to sanitize.
- * @return string $statement_descriptor Sanitized statement descriptor.
- */
-function edds_sanitize_statement_descriptor( $statement_descriptor ) {
-	$unsupported_characters = edds_get_statement_descriptor_unsupported_characters();
-
-	$statement_descriptor = trim( str_replace( $unsupported_characters, '', $statement_descriptor ) );
-	$statement_descriptor = substr( $statement_descriptor, 0, 22 );
-
-	return $statement_descriptor;
-}
-
-/**
  * Retrieves a given registry instance by name.
  *
  * @since 2.6.19
@@ -556,8 +495,6 @@ function edds_verify( $nonce = 'edd-process-checkout-nonce', $action = 'edd-proc
 		return \EDD\Utils\Tokenizer::is_token_valid( $token, $timestamp );
 	}
 
-	edd_debug_log( 'Attempted to verify ' . $action . ' session by tokenizer but the data was missing.' );
-
 	// Checkout.
 	$nonce = isset( $_POST[ $nonce ] )
 		? sanitize_text_field( $_POST[ $nonce ] )
@@ -602,12 +539,10 @@ function edds_documentation_route( $type ) {
  *              validated by Stripe when a request is made.
  */
 function edds_stripe_connect_account_country_supports_application_fees() {
-	$edd_country = edd_get_option( 'base_country', '' );
 
-	$account_country = edd_get_option(
-		'stripe_connect_account_country',
-		$edd_country
-	);
+	$account_country = edd_stripe()->connect() ?
+		edd_stripe()->connect->get_connect_country() :
+		false;
 
 	// If we have no country to compare against try to add an application fee.
 	// If the Stripe account is actually one of the blocked countries an API

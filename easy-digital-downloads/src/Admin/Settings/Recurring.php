@@ -10,11 +10,20 @@
  * @license     https://opensource.org/licenses/gpl-2.0.php GNU Public License
  * @since       2.11.4
  */
+
 namespace EDD\Admin\Settings;
 
-use \EDD\Admin\Extensions\Extension;
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || exit; // @codeCoverageIgnore
+
+use EDD\Admin\Extensions\Extension;
 use EDD\EventManagement\SubscriberInterface;
 
+/**
+ * Recurring Payments
+ *
+ * @since 2.11.4
+ */
 class Recurring extends Extension implements SubscriberInterface {
 
 	/**
@@ -31,11 +40,6 @@ class Recurring extends Extension implements SubscriberInterface {
 	 * @var string
 	 */
 	protected $settings_tab = 'gateways';
-
-	/**
-	 * The pass level required to access this extension.
-	 */
-	const PASS_LEVEL = \EDD\Admin\Pass_Manager::EXTENDED_PASS_ID;
 
 	/**
 	 * The settings section for this item.
@@ -56,6 +60,7 @@ class Recurring extends Extension implements SubscriberInterface {
 			'edd_settings_sections_gateways'             => 'add_section',
 			'edd_settings_tab_top_gateways_recurring'    => 'settings_field',
 			'edd_settings_tab_bottom_gateways_recurring' => 'hide_submit_button',
+			'edd_settings_wrap_classes'                  => 'add_wrap_class',
 		);
 	}
 
@@ -69,14 +74,14 @@ class Recurring extends Extension implements SubscriberInterface {
 	protected function get_configuration( \EDD\Admin\Extensions\ProductData $product_data ) {
 		return array(
 			'style'       => 'detailed-2col',
-			'heading'     => 'Increase Revenue By Selling Subscriptions!',
+			'heading'     => __( 'Increase Revenue By Selling Subscriptions!', 'easy-digital-downloads' ),
 			'description' => $this->get_custom_description(),
 			'features'    => array(
-				'Flexible Recurring Payments',
-				'Custom Reminder Emails',
-				'Free Trial Support',
-				'Signup Fees',
-				'Recurring Revenue Reports',
+				__( 'Flexible Recurring Payments', 'easy-digital-downloads' ),
+				__( 'Custom Reminder Emails', 'easy-digital-downloads' ),
+				__( 'Free Trial Support', 'easy-digital-downloads' ),
+				__( 'Signup Fees', 'easy-digital-downloads' ),
+				__( 'Recurring Revenue Reports', 'easy-digital-downloads' ),
 			),
 		);
 	}
@@ -89,8 +94,8 @@ class Recurring extends Extension implements SubscriberInterface {
 	 */
 	private function get_custom_description() {
 		$description = array(
-			'Grow stable income by selling subscriptions and make renewals hassle free for your customers.',
-			'When your customers are automatically billed, you reduce the risk of missed payments and retain more customers.',
+			__( 'Grow stable income by selling subscriptions and make renewals hassle free for your customers.', 'easy-digital-downloads' ),
+			__( 'When your customers are automatically billed, you reduce the risk of missed payments and retain more customers.', 'easy-digital-downloads' ),
 		);
 
 		return $this->format_description( $description );
@@ -99,7 +104,7 @@ class Recurring extends Extension implements SubscriberInterface {
 	/**
 	 * Adds the Recurring Payments section to the settings.
 	 *
-	 * @param array $sections
+	 * @param array $sections The existing sections.
 	 * @return array
 	 */
 	public function add_section( $sections ) {

@@ -11,8 +11,8 @@
 
 $view_url = edd_get_admin_url(
 	array(
-		'page'       => 'edd-discounts',
-		'edd-action' => 'edit_discount',
+		'page' => 'edd-discounts',
+		'view' => 'edit_discount',
 	)
 );
 ?>
@@ -24,7 +24,12 @@ $view_url = edd_get_admin_url(
 		<# if ( true === data.state.isAdding ) { #>
 		<button class="button-link delete">
 			<span class="dashicons dashicons-no"></span>
-			<span class="screen-reader-text"><?php printf( __( 'Remove %s', 'easy-digital-downloads' ), '{{{ data.type }}}' ); ?></span>
+			<span class="screen-reader-text">
+				<?php
+				/* translators: %s: Adjustment type (discount, fee, etc) */
+				printf( __( 'Remove %s', 'easy-digital-downloads' ), '{{{ data.type }}}' );
+				?>
+			</span>
 		</button>
 		<# } #>
 

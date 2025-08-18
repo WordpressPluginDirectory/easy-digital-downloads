@@ -9,18 +9,30 @@
  * @since       1.0
  */
 
-// Exit if accessed directly
+// Exit if accessed directly.
 defined( 'ABSPATH' ) || exit;
+
+use EDD\Database\Queries\Email as Query;
+
+/**
+ * Retrieves the email template registry.
+ *
+ * @since 3.3.0
+ * @return EDD\Emails\Templates\Registry $emails The email templates
+ */
+function edd_get_email_registry() {
+	return EDD\Emails\Templates\Registry::get_instance();
+}
 
 /**
  * Retrieves the emails for which admin notifications are sent to (these can be
  * changed in the EDD Settings)
  *
  * @since 1.0
- * @param null|EDD\Orders\Order $order Optional. The order object. Default: null. Added in 3.2.3.
+ * @param null|EDD\Orders\Order $email Optional. The email object. Default: null. Added in 3.2.3.
  * @return array $emails The emails to send admin notices to
  */
-function edd_get_admin_notice_emails( $order = null ) {
+function edd_get_admin_notice_emails( $email = null ) {
 	$emails = edd_get_option( 'admin_notice_emails', false );
 	$emails = strlen( trim( $emails ) ) > 0 ? $emails : get_bloginfo( 'admin_email' );
 	$emails = array_map( 'trim', explode( "\n", $emails ) );
@@ -29,9 +41,9 @@ function edd_get_admin_notice_emails( $order = null ) {
 	 * Filters the emails for which admin notifications are sent.
 	 *
 	 * @param array $emails The emails to send admin notices to.
-	 * @param null|EDD\Orders\Order $order Optional. The order object. Default: null. Added in 3.2.3.
+	 * @param null|EDD\Orders\Order $email Optional. The email object. Default: null. Added in 3.2.3.
 	 */
-	return apply_filters( 'edd_admin_notice_emails', $emails, $order );
+	return apply_filters( 'edd_admin_notice_emails', $emails, $email );
 }
 
 /**
@@ -39,137 +51,185 @@ function edd_get_admin_notice_emails( $order = null ) {
  *
  * @since 1.5.2
  *
- * @param int $payment_id
+ * @param int $payment_id The payment ID
  * @return mixed
  */
 function edd_admin_notices_disabled( $payment_id = 0 ) {
-	$ret = edd_get_option( 'disable_admin_notices', false );
-	return (bool) apply_filters( 'edd_admin_notices_disabled', $ret, $payment_id );
+	$email  = edd_get_email( 'admin_order_notice' );
+	$status = $email && $email->is_enabled();
+
+	return (bool) apply_filters( 'edd_admin_notices_disabled', empty( $status ), $payment_id );
 }
 
 /**
- * Handle installation and connection for Recapture via ajax
+ * Get an email.
  *
- * @since 2.10.2
+ * @since 3.3.0
+ *
+ * @param int|string $email_id The email ID. This can also be the email_id because that's really how we identify emails.
+ * @return \EDD\Emails\Email|false
  */
-function edd_recapture_remote_install_handler () {
-
-	if ( ! current_user_can( 'manage_shop_settings' ) || ! current_user_can( 'install_plugins' ) ) {
-		wp_send_json_error( array(
-			'error' => __( 'You do not have permission to do this.', 'easy-digital-downloads' )
-		) );
+function edd_get_email( $email_id = 0 ) {
+	$query = new Query();
+	if ( ! is_numeric( $email_id ) ) {
+		return $query->get_item_by( 'email_id', $email_id );
 	}
 
-	include_once ABSPATH . 'wp-admin/includes/plugin-install.php';
-	include_once ABSPATH . 'wp-admin/includes/file.php';
-	include_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-
-	$plugins = get_plugins();
-
-	if( ! array_key_exists( 'recapture-for-edd/recapture.php', $plugins ) ) {
-
-		/*
-		* Use the WordPress Plugins API to get the plugin download link.
-		*/
-		$api = plugins_api( 'plugin_information', array(
-			'slug' => 'recapture-for-edd',
-		) );
-
-		if ( is_wp_error( $api ) ) {
-			wp_send_json_error( array(
-				'error' => $api->get_error_message(),
-				'debug' => $api
-			) );
-		}
-
-		/*
-		* Use the AJAX Upgrader skin to quietly install the plugin.
-		*/
-		$upgrader = new Plugin_Upgrader( new WP_Ajax_Upgrader_Skin() );
-		$install = $upgrader->install( $api->download_link );
-		if ( is_wp_error( $install ) ) {
-			wp_send_json_error( array(
-				'error' => $install->get_error_message(),
-				'debug' => $api
-			) );
-		}
-
-		$activated = activate_plugin( $upgrader->plugin_info() );
-
-	} else {
-
-		$activated = activate_plugin( 'recapture-for-edd/recapture.php' );
-
-	}
-
-	/*
-	* Final check to see if Recapture is available.
-	*/
-	if ( is_wp_error( $activated ) ) {
-		wp_send_json_error( array(
-			'error' => __( 'Something went wrong. Recapture for EDD was not installed correctly.', 'easy-digital-downloads' )
-		) );
-	}
-
-	wp_send_json_success();
+	return $query->get_item( $email_id );
 }
-add_action( 'wp_ajax_edd_recapture_remote_install', 'edd_recapture_remote_install_handler' );
 
 /**
- * Maybe adds a notice to abandoned payments if Recapture isn't installed.
+ * Adds an email to the database.
  *
- * @since 2.10.2
- *
- * @param int $payment_id The ID of the abandoned payment, for which a Recapture notice is being thrown.
+ * @since 3.3.0
+ * @param array $args The query arguments.
+ * @return int|false
  */
-function maybe_add_recapture_notice_to_abandoned_payment( $payment_id ) {
+function edd_add_email( $args = array() ) {
+	$query = new Query();
 
-	if ( ! class_exists( 'Recapture' )
-		&& 'abandoned' === edd_get_payment_status( $payment_id )
-		&& ! get_user_meta( get_current_user_id(), '_edd_try_recapture_dismissed', true )
-	) {
-		?>
-		<div class="notice notice-warning recapture-notice">
-			<p>
-				<?php
-				echo wp_kses_post(
-					sprintf(
-						/* Translators: %1$s - <strong> tag, %2$s - </strong> tag, %3$s - <a> tag, %4$s - </a> tag */
-						__( '%1$sRecover abandoned purchases like this one.%2$s %3$sTry Recapture for free%4$s.', 'easy-digital-downloads' ),
-						'<strong>',
-						'</strong>',
-						'<a href="https://recapture.io/abandoned-carts-easy-digital-downloads" rel="noopener" target="_blank">',
-						'</a>'
-					)
-				);
-				?>
-			</p>
-			<?php
-			echo wp_kses_post(
-				sprintf(
-					/* Translators: %1$s - Opening anchor tag, %2$s - The url to dismiss the ajax notice, %3$s - Complete the opening of the anchor tag, %4$s - Open span tag, %4$s - Close span tag */
-					__( '%1$s %2$s %3$s %4$s Dismiss this notice. %5$s', 'easy-digital-downloads' ),
-					'<a href="',
-					esc_url(
-						wp_nonce_url(
-							add_query_arg(
-								array(
-									'edd_action' => 'dismiss_notices',
-									'edd_notice' => 'try_recapture',
-								)
-							),
-							'edd_notice_nonce'
-						)
-					),
-					'" type="button" class="notice-dismiss">',
-					'<span class="screen-reader-text">',
-					'</span>
-					</a>'
-				)
-			);
-			?>
-		</div>
-		<?php
-	}
+	return $query->add_item( $args );
 }
-add_action( 'edd_view_order_details_before', 'maybe_add_recapture_notice_to_abandoned_payment' );
+
+/**
+ * Updates an email in the database.
+ *
+ * @since 3.3.0
+ * @param int   $email_id The email ID.
+ * @param array $args     The query arguments.
+ * @return bool
+ */
+function edd_update_email( $email_id = 0, $args = array() ) {
+	$query = new Query();
+
+	return $query->update_item( $email_id, $args );
+}
+
+/**
+ * Deletes an email from the database.
+ *
+ * @since 3.3.0
+ * @param int $email_id The email ID.
+ * @return bool
+ */
+function edd_delete_email( $email_id = 0 ) {
+	$query = new Query();
+
+	return $query->delete_item( $email_id );
+}
+
+/**
+ * Gets an email by a field.
+ *
+ * @since 3.3.0
+ * @param string $field The field to query by.
+ * @param string $value The value to query by.
+ * @return \EDD\Emails\Email
+ */
+function edd_get_email_by( $field = '', $value = '' ) {
+	$query = new Query();
+
+	return $query->get_item_by( $field, $value );
+}
+
+/**
+ * Gets emails.
+ *
+ * @since 3.3.0
+ * @param array $args The query arguments.
+ * @return \EDD\Emails\Email[]
+ */
+function edd_get_emails( $args = array() ) {
+
+	$r     = wp_parse_args(
+		$args,
+		array(
+			'number' => 300,
+		)
+	);
+	$query = new Query();
+
+	return $query->query( $r );
+}
+
+/**
+ * Add meta data field to an email.
+ *
+ * @since 3.3.0
+ *
+ * @param int    $email_id   Order ID.
+ * @param string $meta_key   Meta data name.
+ * @param mixed  $meta_value Meta data value. Must be serializable if non-scalar.
+ * @param bool   $unique     Optional. Whether the same key should not be added. Default false.
+ *
+ * @return int|false Meta ID on success, false on failure.
+ */
+function edd_add_email_meta( $email_id, $meta_key, $meta_value, $unique = false ) {
+	return add_metadata( 'edd_email', $email_id, $meta_key, $meta_value, $unique );
+}
+
+/**
+ * Remove meta data matching criteria from an email.
+ *
+ * You can match based on the key, or key and value. Removing based on key and value, will keep from removing duplicate
+ * meta data with the same key. It also allows removing all meta data matching key, if needed.
+ *
+ * @since 3.3.0
+ *
+ * @param int    $email_id   Order ID.
+ * @param string $meta_key   Meta data name.
+ * @param mixed  $meta_value Optional. Meta data value. Must be serializable if non-scalar. Default empty.
+ *
+ * @return bool True on success, false on failure.
+ */
+function edd_delete_email_meta( $email_id, $meta_key, $meta_value = '' ) {
+	return delete_metadata( 'edd_email', $email_id, $meta_key, $meta_value );
+}
+
+/**
+ * Retrieve email meta field for an email.
+ *
+ * @since 3.3.0
+ *
+ * @param int    $email_id  Order ID.
+ * @param string $key       Optional. The meta key to retrieve. By default, returns data for all keys. Default empty.
+ * @param bool   $single    Optional, default is false. If true, return only the first value of the specified meta_key.
+ *                          This parameter has no effect if meta_key is not specified.
+ *
+ * @return mixed Will be an array if $single is false. Will be value of meta data field if $single is true.
+ */
+function edd_get_email_meta( $email_id, $key = '', $single = false ) {
+	return get_metadata( 'edd_email', $email_id, $key, $single );
+}
+
+/**
+ * Update email meta field based on email ID.
+ *
+ * Use the $prev_value parameter to differentiate between meta fields with the
+ * same key and email ID.
+ *
+ * If the meta field for the email does not exist, it will be added.
+ *
+ * @since 3.3.0
+ *
+ * @param int    $email_id   Email ID.
+ * @param string $meta_key   Meta data key.
+ * @param mixed  $meta_value Meta data value. Must be serializable if non-scalar.
+ * @param mixed  $prev_value Optional. Previous value to check before removing. Default empty.
+ *
+ * @return int|bool Meta ID if the key didn't exist, true on successful update, false on failure.
+ */
+function edd_update_email_meta( $email_id, $meta_key, $meta_value, $prev_value = '' ) {
+	return update_metadata( 'edd_email', $email_id, $meta_key, $meta_value, $prev_value );
+}
+
+/**
+ * Delete everything from email meta matching meta key.
+ *
+ * @since 3.3.0
+ * @param string $meta_key Key to search for when deleting.
+ * @return bool Whether the email meta key was deleted from the database.
+ */
+function edd_delete_email_meta_by_key( $meta_key ) {
+	return delete_metadata( 'edd_email', null, $meta_key, '', true );
+}

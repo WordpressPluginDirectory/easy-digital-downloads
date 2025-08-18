@@ -3019,12 +3019,15 @@ class EDD_Payment {
 				$download_id = 0;
 				$price_id    = null;
 
-				if ( 'order_item' === $order_fee->object_type && array_key_exists( intval( $order_fee->object_id ), $order_items ) ) {
+				if (
+					'order_item' === $order_fee->object_type &&
+					array_key_exists( intval( $order_fee->object_id ), $order_items )
+					) {
 					$download_id = $order_items[ intval( $order_fee->object_id ) ]['download_id'];
 					$price_id    = $order_items[ intval( $order_fee->object_id ) ]['price_id'];
 				}
 
-				$no_tax = (bool) 0.00 === $order_fee->tax;
+				$no_tax = $order_fee->tax <= 0;
 				$id     = is_null( $order_fee->type_key ) ? $order_fee->id : $order_fee->type_key;
 				if ( array_key_exists( $id, $fees ) ) {
 					$id .= '_2';
@@ -3612,38 +3615,41 @@ class EDD_Payment {
 	 * @return EDD_Customer The customer object of the existing customer or new customer.
 	 */
 	private function maybe_create_customer() {
-		$customer = new stdClass();
 
 		if ( did_action( 'edd_pre_process_purchase' ) && is_user_logged_in() ) {
-			$customer = new EDD_customer( get_current_user_id(), true );
+			$customer = edd_get_customer_by( 'user_id', get_current_user_id() );
 
-			// Customer is logged in but used a different email to purchase with so assign to their customer record
+			// Customer is logged in but used a different email to purchase with so assign to their customer record.
 			if ( ! empty( $customer->id ) && $this->email !== $customer->email ) {
 				$customer->add_email( $this->email );
 			}
-		}
 
-		if ( empty( $customer->id ) ) {
-			$customer = new EDD_Customer( $this->email );
-		}
-
-		if ( empty( $customer->id ) ) {
-			if ( empty( $this->first_name ) && empty( $this->last_name ) ) {
-				$name = $this->email;
-			} else {
-				$name = $this->first_name . ' ' . $this->last_name;
+			if ( $customer ) {
+				return $customer;
 			}
+		}
 
-			$customer_data = array(
+		$customer = edd_get_customer_by( 'email', $this->email );
+		if ( ! empty( $customer->id ) ) {
+			return $customer;
+		}
+
+		if ( empty( $this->first_name ) && empty( $this->last_name ) ) {
+			$name = $this->email;
+		} else {
+			$name = trim( $this->first_name . ' ' . $this->last_name );
+		}
+
+		$customer_id = edd_add_customer(
+			array(
 				'name'    => $name,
 				'email'   => $this->email,
 				'user_id' => $this->user_id,
-			);
+			)
+		);
 
-			$customer->create( $customer_data );
-		}
-
-		return $customer;
+		// If the customer was created, return the customer object; otherwise return an empty customer object.
+		return $customer_id ? edd_get_customer( $customer_id ) : new EDD_Customer( 0 );
 	}
 
 	/**

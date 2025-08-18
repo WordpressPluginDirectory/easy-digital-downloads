@@ -18,6 +18,14 @@ final class ApplicationFee {
 	private $license;
 
 	/**
+	 * The status of the license.
+	 *
+	 * @since 3.2.7
+	 * @var string
+	 */
+	private $status = '';
+
+	/**
 	 * Whether the application fee should be added to the payment/setup intent.
 	 *
 	 * @since 3.2.0
@@ -26,31 +34,37 @@ final class ApplicationFee {
 	public function has_application_fee() {
 		// Not connected (always false).
 		if ( empty( edd_stripe()->connect()->get_connect_id() ) ) {
+			$this->status = 'Not Connected';
 			return false;
 		}
 
 		// Not in country that supports the fees (always false).
 		if ( true !== edds_stripe_connect_account_country_supports_application_fees() ) {
+			$this->status = 'Not Supported';
 			return false;
 		}
 
 		// No license (always true).
 		if ( ! $this->get_license() ) {
+			$this->status = 'No License';
 			return true;
 		}
 
 		// The license is valid (always false).
 		if ( $this->license->is_license_valid() ) {
+			$this->status = 'Valid License';
 			return false;
 		}
 
 		// It's a new pro install, so false for now.
 		if ( $this->license->is_in_new_install_grace_period() ) {
+			$this->status = 'New Install Grace Period';
 			return false;
 		}
 
 		// License is expired, but in the grace period, so false for now.
 		if ( $this->license->is_in_grace_period() ) {
+			$this->status = 'Grace Period';
 			return false;
 		}
 
@@ -88,7 +102,7 @@ final class ApplicationFee {
 		}
 
 		$message = sprintf(
-			/* translators: 1. opening strong tag; 2. closing strong tag; 3. the message explaining the application fee (eg "3% per-transaction fee + Stripe fees"). */
+			/* translators: 1: opening strong tag, 2: closing strong tag, 3: the message explaining the application fee (eg "3% per-transaction fee + gateway fees"). */
 			__( '%1$sPay as you go pricing:%2$s %3$s.', 'easy-digital-downloads' ),
 			'<strong>',
 			'</strong>',
@@ -96,7 +110,7 @@ final class ApplicationFee {
 		);
 		if ( empty( $this->license->license_data->key ) && ! edds_is_pro() && ! edd_is_pro() ) {
 			$message .= ' ' . sprintf(
-				/* Translators: Replacements are for the html wrappers for the phrse Upgrade to Pro and should not be translated. */
+				/* translators: Replacements are for the html wrappers for the phrase Upgrade to Pro and should not be translated. */
 				__( '%1$sUpgrade to Pro%2$s to remove transaction fees.', 'easy-digital-downloads' ),
 				'<span class="edd-pro-upgrade"><a href="' . edd_link_helper(
 					'https://easydigitaldownloads.com/pricing/',
@@ -121,6 +135,35 @@ final class ApplicationFee {
 	 */
 	public function reset_license() {
 		$this->license = null;
+		$this->status  = '';
+	}
+
+	/**
+	 * Gets the status of the Stripe connection.
+	 *
+	 * @since 3.2.7
+	 * @return string
+	 */
+	public function get_status() {
+		if ( empty( $this->status ) ) {
+			$this->has_application_fee();
+		}
+
+		$status = 'License Data Missing';
+		if ( empty( $this->status ) ) {
+			$license = $this->get_license();
+			if ( ! empty( $license->license_data->error ) ) {
+				$status = 'License Error: ' . $license->license_data->error;
+			} else {
+				$pro_license = new \EDD\Licensing\License( 'pro' );
+				if ( ! empty( $pro_license->error ) ) {
+					$status = 'License Error: ' . $pro_license->error;
+				}
+			}
+			$this->status = $status;
+		}
+
+		return $this->status;
 	}
 
 	/**
@@ -170,7 +213,7 @@ final class ApplicationFee {
 	private function get_initial_connect_message() {
 		if ( ! $this->get_license() || empty( $this->license->license_data->key ) ) {
 			return sprintf(
-				/* translators: the message explaining the application fee (eg "3% per-transaction fee + Stripe fees") */
+				/* translators: the message explaining the application fee (eg "3% per-transaction fee + gateway fees") */
 				__( 'Connect with Stripe for pay as you go pricing: %s.', 'easy-digital-downloads' ),
 				$this->get_base_fee_message()
 			);
@@ -178,7 +221,7 @@ final class ApplicationFee {
 
 		// Stripe Pro is active, but the license is not valid.
 		return sprintf(
-			/* translators: the message explaining the application fee (eg "3% per-transaction fee + Stripe fees") */
+			/* translators: the message explaining the application fee (eg "3% per-transaction fee + gateway fees") */
 			__( 'Connect with Stripe for pay as you go pricing: %s. Activate your license to remove the per-transaction fee.', 'easy-digital-downloads' ),
 			$this->get_base_fee_message()
 		);
@@ -199,7 +242,7 @@ final class ApplicationFee {
 		if ( $new_install_grace ) {
 			return ' ' . sprintf(
 				/* translators: the date the grace period ends */
-				__( 'You are in a grace period for your new license. Activate your license by %s to remove additional fees.', 'easy-digital-downloads' ),
+				__( 'You are in a grace period for your new license. Activate your license by %s to prevent additional fees.', 'easy-digital-downloads' ),
 				$new_install_grace
 			);
 		}
@@ -209,7 +252,7 @@ final class ApplicationFee {
 			$grace_period_end_date = $license->get_grace_period_end_date();
 			if ( $grace_period_end_date ) {
 				return ' ' . sprintf(
-					/* translators: 1. opening link tag, do not translate; 2. closing link tag, do not translate;  3. the date the grace period ends */
+					/* translators: 1: opening link tag, do not translate, 2: closing link tag, do not translate;  3. the date the grace period ends */
 					__( 'Your license has expired, but you are in a grace period. %1$sRenew your license key%2$s before %3$s to prevent being charged additional transaction fees.', 'easy-digital-downloads' ),
 					'<a href="' . esc_url( $license->get_renewal_url( 'expired' ) ) . '" target="_blank">',
 					'</a>',
@@ -218,8 +261,8 @@ final class ApplicationFee {
 			}
 
 			return ' ' . sprintf(
-				/* translators: 1. the date the license expired; 2. opening link tag, do not translate; 3. closing link tag, do not translate  */
-				__( 'Your license expired on %1$s. %2$sRenew your license%3$s to remove additional fees.', 'easy-digital-downloads' ),
+				/* translators: 1: the date the license expired, 2: opening link tag, do not translate, 3: closing link tag, do not translate  */
+				__( 'Your license expired on %1$s. %2$sRenew your license%3$s to prevent additional fees.', 'easy-digital-downloads' ),
 				$license->get_expiration_date(),
 				'<a href="' . esc_url( $license->get_renewal_url( 'expired' ) ) . '" target="_blank">',
 				'</a>'
@@ -228,7 +271,7 @@ final class ApplicationFee {
 
 		return ' ' . sprintf(
 			/* translators: opening link tag, do not translate; closing link tag, do not translate */
-			__( '%1$sActivate or upgrade your license%2$s to remove additional fees.', 'easy-digital-downloads' ),
+			__( '%1$sActivate or upgrade your license%2$s to prevent additional fees.', 'easy-digital-downloads' ),
 			'<a href="' . esc_url( $license->get_licensing_url() ) . '">',
 			'</a>'
 		);

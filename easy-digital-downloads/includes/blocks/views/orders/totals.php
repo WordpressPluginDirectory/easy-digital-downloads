@@ -10,6 +10,7 @@
 do_action( 'edd_order_receipt_before_table', $order, array() );
 ?>
 <div class="edd-blocks-receipt__totals">
+	<?php do_action( 'edd_order_receipt_before', $order, array() ); ?>
 	<div class="edd-blocks__row edd-blocks__row-header edd-blocks-receipt__row-header">
 		<div class="edd-blocks__row-label"><?php echo esc_html_x( 'Order', 'heading', 'easy-digital-downloads' ); ?>:</div>
 		<div class="edd-blocks__row-value"><?php echo esc_html( $order->get_number() ); ?></div>
@@ -30,7 +31,7 @@ do_action( 'edd_order_receipt_before_table', $order, array() );
 	<?php if ( $edd_receipt_args['payment_method'] ) : ?>
 		<div class="edd-blocks__row edd-blocks-receipt__row-item">
 			<div class="edd-blocks__row-label"><?php esc_html_e( 'Payment Method', 'easy-digital-downloads' ); ?>:</div>
-			<div class="edd-blocks__row-value"><?php echo esc_html( edd_get_gateway_checkout_label( $order->gateway ) ); ?></div>
+			<div class="edd-blocks__row-value"><?php echo esc_html( edd_get_gateway_checkout_label( $order->gateway, $order ) ); ?></div>
 		</div>
 	<?php endif; ?>
 
@@ -67,11 +68,16 @@ do_action( 'edd_order_receipt_before_table', $order, array() );
 	<?php
 	do_action( 'edd_order_receipt_order_details', $order );
 	if ( has_action( 'edd_order_receipt_after' ) ) {
-		?>
-		<div class="edd-blocks-receipt__row-item">
-			<?php EDD\Blocks\Orders\Functions\do_order_details( $order, 'edd_order_receipt_after', array() ); ?>
-		</div>
-		<?php
+		ob_start();
+		EDD\Blocks\Orders\Functions\do_order_details( $order, 'edd_order_receipt_after', array() );
+		$content = ob_get_clean();
+		if ( ! empty( $content ) ) {
+			?>
+			<div class="edd-blocks-receipt__row-item">
+				<?php echo wp_kses_post( $content ); ?>
+			</div>
+			<?php
+		}
 	}
 	?>
 </div>

@@ -2,15 +2,22 @@
 /**
  * Status Badge utility.
  *
- * @package   easy-digital-downloads
- * @copyright Copyright (c) 2023, Easy Digital Downloads
- * @license   GPL2+
+ * @package   EDD\Utils
+ * @copyright Copyright (c) 2023, Sandhills Development, LLC
+ * @license   https://opensource.org/licenses/gpl-2.0.php GNU Public License
  * @since     3.1.4
  */
+
 namespace EDD\Utils;
 
-defined( 'ABSPATH' ) || exit;
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || exit; // @codeCoverageIgnore
 
+/**
+ * Status Badge utility.
+ *
+ * @since 3.1.4
+ */
 class StatusBadge {
 
 	/**
@@ -35,6 +42,7 @@ class StatusBadge {
 				'color'    => '',
 				'dashicon' => true,
 				'class'    => '',
+				'position' => 'after',
 			)
 		);
 	}
@@ -50,12 +58,16 @@ class StatusBadge {
 		if ( empty( $this->args['label'] ) ) {
 			return '';
 		}
+		if ( empty( $icon ) ) {
+			$icon = $this->get_icon();
+		}
 
 		return sprintf(
-			'<span class="%s"><span class="edd-status-badge__text">%s</span>%s</span>',
+			'<span class="%1$s">%4$s<span class="edd-status-badge__text">%2$s</span>%3$s</span>',
 			$this->get_class_string( $this->get_classes() ),
 			esc_html( $this->args['label'] ),
-			! empty( $icon ) ? $icon : $this->get_icon()
+			'after' === $this->args['position'] ? $icon : '',
+			'before' === $this->args['position'] ? $icon : ''
 		);
 	}
 
@@ -87,25 +99,40 @@ class StatusBadge {
 	}
 
 	/**
+	 * Renders the badge.
+	 *
+	 * @since 3.5.0
+	 */
+	public function render() {
+		echo $this->get();
+	}
+
+	/**
 	 * Gets the classes for the badge.
 	 *
 	 * @since 3.1.4
 	 * @return array
 	 */
 	private function get_classes() {
-		return array(
+		$classes = array(
 			'edd-status-badge',
 			"edd-status-badge--{$this->args['status']}",
-			$this->args['class'],
 			$this->get_color_class(),
 		);
+		if ( is_array( $this->args['class'] ) ) {
+			$classes = array_merge( $classes, $this->args['class'] );
+		} elseif ( ! empty( $this->args['class'] ) ) {
+			$classes[] = $this->args['class'];
+		}
+
+		return $classes;
 	}
 
 	/**
 	 * Gets a class string from an array of classes.
 	 *
 	 * @since 3.1.4
-	 * @param array $classes
+	 * @param array $classes The classes to get a string from.
 	 * @return string
 	 */
 	private function get_class_string( array $classes ) {

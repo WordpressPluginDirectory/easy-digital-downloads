@@ -7,8 +7,17 @@
  * @license   GPL2+
  * @since     3.1.1
  */
+
 namespace EDD\Telemetry;
 
+// Exit if accessed directly.
+
+defined( 'ABSPATH' ) || exit;
+/**
+ * Class Orders
+ *
+ * @since 3.1.1
+ */
 class Orders {
 
 	/**
@@ -28,6 +37,18 @@ class Orders {
 	 * @return array
 	 */
 	public function get() {
+		/**
+		 * Allows the ability to opt-out of sending aggregate gateway data to the telemetry server.
+		 *
+		 * @since 3.2.8
+		 *
+		 * @param bool $send_aggregate_data Whether to send aggregate gateway data to the telemetry server. Default is true.
+		 * @return bool
+		 */
+		if ( false === apply_filters( 'edd_telemetry_send_aggregate_gateway_data', true ) ) {
+			return array();
+		}
+
 		$data = array(
 			'all_gateways' => $this->get_totals(),
 		);

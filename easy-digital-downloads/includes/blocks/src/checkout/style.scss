@@ -12,6 +12,10 @@
 		select {
 			padding: 4px 6px;
 		}
+
+		.edd-card-vat-wrap {
+			grid-column: span 2;
+		}
 	}
 
 	.edd-blocks-form__cart,
@@ -155,4 +159,31 @@
 
 .edd-blocks-cart__row-buttons {
 	justify-content: flex-end;
+}
+
+.edd-blocks-form.cc-address {
+	grid-template-columns: 1fr 1fr;
+
+	legend,
+	> div {
+		grid-column: span 2;
+	}
+
+	&.cc-address--state-zip {
+		.edd-card-state,
+		.edd-card-zip {
+			grid-column: span 1;
+		}
+	}
+
+	&.cc-address--country-zip {
+		legend,
+		> div {
+			grid-column: span 1;
+		}
+	}
+
+	.iti {
+		display: block;
+	}
 }

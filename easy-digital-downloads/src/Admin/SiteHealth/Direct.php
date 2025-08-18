@@ -75,8 +75,7 @@ class Direct extends Test {
 				'<p>%s</p>',
 				__( 'Easy Digital Downloads requires a specific checkout page to be set to easily handle user interactions.', 'easy-digital-downloads' )
 			);
-			$result['actions'] = sprintf(
-				'<a class="button button-primary" href="%s">%s</a>',
+			$result['actions']     = $this->get_action_button(
 				edd_get_admin_url(
 					array(
 						'page'    => 'edd-settings',
@@ -88,13 +87,13 @@ class Direct extends Test {
 			);
 		} else {
 			if ( ! has_block( 'edd/checkout', $purchase_page ) ) {
-				$result['label'] = __( 'Your checkout page is using the legacy shortcode', 'easy-digital-downloads' );
+				$result['label']          = __( 'Your checkout page is using the legacy shortcode', 'easy-digital-downloads' );
 				$result['status']         = 'recommended';
 				$result['badge']['color'] = 'orange';
 
 				$result['description'] = wpautop(
 					sprintf(
-						/* translators: %1$s - opening <code> tag, %2$s - closing <code> tag */
+						/* translators: 1:  opening <code> tag, 2.  closing <code> tag */
 						__( 'Your checkout page is configured; however, it is currently using the legacy %1$s[download_checkout]%2$s shortcode. We recommend changing your checkout to use the EDD Checkout Block.', 'easy-digital-downloads' ),
 						'<code>',
 						'</code>'
@@ -102,8 +101,7 @@ class Direct extends Test {
 				);
 
 				// Link the action to edit the checkout page.
-				$result['actions'] = sprintf(
-					'<a class="button button-secondary" href="%s">%s</a>',
+				$result['actions'] = $this->get_action_button(
 					admin_url( 'post.php?post=' . $purchase_page . '&action=edit' ),
 					__( 'Edit Checkout Page', 'easy-digital-downloads' )
 				);
@@ -136,8 +134,8 @@ class Direct extends Test {
 		}
 
 		// Attempt to get the main index.php file. If we get a 403, the downloads are protected after all.
-		$check = wp_safe_remote_get( trailingslashit( edd_get_upload_url() ) . 'index.php' );
-		if ( 403 === wp_remote_retrieve_response_code( $check ) ) {
+		$check = new \EDD\Utils\RemoteRequest( trailingslashit( edd_get_upload_url() ) . 'index.php' );
+		if ( 403 === $check->code ) {
 			return $result;
 		}
 
@@ -154,7 +152,7 @@ class Direct extends Test {
 			$result['description']    = sprintf(
 				'<p>%s %s</p>',
 				sprintf(
-					/* translators: 1. opening link tag; 2. closing link tag */
+					/* translators: 1: opening link tag, 2: closing link tag */
 					__( 'To ensure the best protection, you should use this doc to add this %1$sNGINX redirect rule%2$s.', 'easy-digital-downloads' ),
 					'<a href="https://easydigitaldownloads.com/docs/download-files-not-protected-on-nginx/">',
 					'</a>'
@@ -182,8 +180,7 @@ class Direct extends Test {
 					__( 'You currently are using the \'Redirect\' download method, which may expose your downloadable products. Either switch to the \'Forced\' method or enable \'Symlinks\'.', 'easy-digital-downloads' )
 				);
 
-				$result['actions'] = sprintf(
-					'<a class="button button-primary" href="%s">%s</a>',
+				$result['actions'] = $this->get_action_button(
 					edd_get_admin_url(
 						array(
 							'page'    => 'edd-settings',
@@ -216,18 +213,17 @@ class Direct extends Test {
 			$result['description']    = sprintf(
 				'<p>%s %s</p>',
 				sprintf(
-					/* translators: the upload directory */
+					/* translators: %s: Uploads directory */
 					__( 'The .htaccess file is missing from: %s', 'easy-digital-downloads' ),
 					'<strong>' . $upload_directory . '</strong>'
 				),
 				sprintf(
-					/* translators: the upload directory */
-					__( 'First, please resave the Misc settings tab a few times. If this warning continues to appear, create a file called ".htaccess" in the %s directory, and copy the following into it:', 'easy-digital-downloads' ),
+					/* translators: %s: Uploads directory */
+					__( 'First, please re-save the Misc settings tab a few times. If this warning continues to appear, create a file called ".htaccess" in the %s directory, and copy the following into it:', 'easy-digital-downloads' ),
 					'<strong>' . $upload_directory . '</strong>'
 				)
 			);
-			$result['actions'] = sprintf(
-				'<a href="%s">%s</a>',
+			$result['actions'] = $this->get_action_button(
 				edd_get_admin_url(
 					array(
 						'page' => 'edd-settings',
@@ -268,15 +264,31 @@ class Direct extends Test {
 
 		$result['status']         = 'critical';
 		$result['badge']['color'] = 'red';
-		$result['actions']        = sprintf(
-			'<a href="%s">%s</a>',
+		$result['label']          = __( 'Your store is not accepting payments', 'easy-digital-downloads' );
+		$result['description']    = sprintf(
+			'<p>%1$s</p><p>%2$s %3$s</p>',
+			__(
+				'To process orders that require payment, you must have a gateway enabled.',
+				'easy-digital-downloads'
+			),
+			__(
+				'A gateway is a service, such as PayPal or Stripe, that allows your store to accept payments.',
+				'easy-digital-downloads'
+			),
+			__(
+				'Stores that offer multiple ways for their customers to pay see higher conversion rates.',
+				'easy-digital-downloads'
+			)
+		);
+
+		$result['actions'] = $this->get_action_button(
 			edd_get_admin_url(
 				array(
 					'page' => 'edd-settings',
 					'tab'  => 'gateways',
 				)
 			),
-			__( 'Please enable at least one gateway in order to allow customers to make purchases.', 'easy-digital-downloads' )
+			__( 'Configure a Gateway', 'easy-digital-downloads' )
 		);
 
 		if ( edd_is_test_mode() ) {

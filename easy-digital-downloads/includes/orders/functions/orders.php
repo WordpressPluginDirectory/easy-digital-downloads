@@ -81,9 +81,12 @@ function edd_trash_order( $order_id ) {
 	$orders         = new EDD\Database\Queries\Order();
 	$current_status = $order->status;
 
-	$trashed = $orders->update_item( $order_id, array(
-		'status' => 'trash',
-	) ); new EDD\Database\Queries\Order();
+	$trashed = $orders->update_item(
+		$order_id,
+		array(
+			'status' => 'trash',
+		)
+	);
 
 	if ( ! empty( $trashed ) ) {
 
@@ -91,18 +94,23 @@ function edd_trash_order( $order_id ) {
 		edd_add_order_meta( $order_id, '_pre_trash_status', $current_status );
 
 		// Update the status of any order to 'trashed'.
-		$order_items = edd_get_order_items( array(
-			'order_id'      => $order_id,
-			'no_found_rows' => true,
-		) );
+		$order_items = edd_get_order_items(
+			array(
+				'order_id'      => $order_id,
+				'no_found_rows' => true,
+			)
+		);
 
 		$items = new EDD\Database\Queries\Order_Item();
 		foreach ( $order_items as $item ) {
 			$current_item_status = $item->status;
 
-			$item_trashed = $items->update_item( $item->id, array(
-				'status' => 'trash',
-			) );
+			$item_trashed = $items->update_item(
+				$item->id,
+				array(
+					'status' => 'trash',
+				)
+			);
 
 			if ( ! empty( $item_trashed ) ) {
 				edd_add_order_item_meta( $item->id, '_pre_trash_status', $current_item_status );
@@ -110,21 +118,22 @@ function edd_trash_order( $order_id ) {
 		}
 
 		// Now look for any orders with the refund type.
-		$refund_orders = edd_get_orders( array(
-			'type'   => 'refund',
-			'parent' => $order_id,
-		) );
+		$refund_orders = edd_get_orders(
+			array(
+				'type'   => 'refund',
+				'parent' => $order_id,
+			)
+		);
 
 		if ( ! empty( $refund_orders ) ) {
-			foreach( $refund_orders as $refund ) {
+			foreach ( $refund_orders as $refund ) {
 
 				$current_refund_status = $refund->status;
-				$refund_trashed = edd_trash_order( $refund->id );
+				$refund_trashed        = edd_trash_order( $refund->id );
 
 				if ( ! empty( $refund_trashed ) ) {
 					edd_add_order_meta( $refund->id, '_pre_trash_status', $current_refund_status );
 				}
-
 			}
 		}
 	}
@@ -160,9 +169,12 @@ function edd_restore_order( $order_id ) {
 		return false;
 	}
 
-	$restored = $orders->update_item( $order_id, array(
-		'status' => $pre_trash_status,
-	) );
+	$restored = $orders->update_item(
+		$order_id,
+		array(
+			'status' => $pre_trash_status,
+		)
+	);
 
 	if ( ! empty( $restored ) ) {
 
@@ -170,39 +182,44 @@ function edd_restore_order( $order_id ) {
 		edd_delete_order_meta( $order_id, '_pre_trash_status' );
 
 		// Update the status of any order to 'trashed'.
-		$order_items = edd_get_order_items( array(
-			'order_id'      => $order_id,
-			'no_found_rows' => true,
-		) );
+		$order_items = edd_get_order_items(
+			array(
+				'order_id'      => $order_id,
+				'no_found_rows' => true,
+			)
+		);
 
 		$items = new EDD\Database\Queries\Order_Item();
 		foreach ( $order_items as $item ) {
 			$pre_trash_status = edd_get_order_item_meta( $item->id, '_pre_trash_status', true );
 
 			if ( ! empty( $pre_trash_status ) ) {
-				$restored_item = $items->update_item( $item->id, array(
-					'status' => $pre_trash_status,
-				) );
+				$restored_item = $items->update_item(
+					$item->id,
+					array(
+						'status' => $pre_trash_status,
+					)
+				);
 
 				if ( ! empty( $restored_item ) ) {
 					edd_delete_order_item_meta( $item->id, '_pre_trash_status' );
 				}
 			}
-
 		}
 
 		// Now look for any orders with the refund type.
-		$refund_orders = edd_get_orders( array(
-			'type'   => 'refund',
-			'parent' => $order_id,
-		) );
+		$refund_orders = edd_get_orders(
+			array(
+				'type'   => 'refund',
+				'parent' => $order_id,
+			)
+		);
 
 		if ( ! empty( $refund_orders ) ) {
-			foreach( $refund_orders as $refund ) {
+			foreach ( $refund_orders as $refund ) {
 				edd_restore_order( $refund->id );
 			}
 		}
-
 	}
 
 	return filter_var( $restored, FILTER_VALIDATE_BOOLEAN );
@@ -249,24 +266,28 @@ function edd_destroy_order( $order_id = 0 ) {
 
 	if ( $destroyed ) {
 		// Get items.
-		$items = edd_get_order_items( array(
-			'order_id'      => $order_id,
-			'no_found_rows' => true,
-		) );
+		$items = edd_get_order_items(
+			array(
+				'order_id'      => $order_id,
+				'no_found_rows' => true,
+			)
+		);
 
 		// Destroy items (and their adjustments).
 		if ( ! empty( $items ) ) {
 			foreach ( $items as $item ) {
-				edd_delete_order_item( $item->id );
+				edd_destroy_order_item( $item->id );
 			}
 		}
 
 		// Get adjustments.
-		$adjustments = edd_get_order_adjustments( array(
-			'object_id'     => $order_id,
-			'object_type'   => 'order',
-			'no_found_rows' => true,
-		) );
+		$adjustments = edd_get_order_adjustments(
+			array(
+				'object_id'     => $order_id,
+				'object_type'   => 'order',
+				'no_found_rows' => true,
+			)
+		);
 
 		// Destroy adjustments.
 		if ( ! empty( $adjustments ) ) {
@@ -279,22 +300,61 @@ function edd_destroy_order( $order_id = 0 ) {
 			}
 		}
 
-		// Get address.
-		$address = edd_get_order_address_by( 'order_id', $order_id );
+		// Get addresses.
+		$addresses = edd_get_order_addresses(
+			array(
+				'order_id' => $order_id,
+			)
+		);
 
-		// Destroy address.
-		if ( $address ) {
-			edd_delete_order_address( $address->id );
+		// Destroy addresses.
+		if ( $addresses ) {
+			foreach ( $addresses as $address ) {
+				edd_delete_order_address( $address->id );
+			}
+		}
+
+		// Get order transactions.
+		$transactions = edd_get_order_transactions(
+			array(
+				'object_id'   => $order_id,
+				'object_type' => 'order',
+			)
+		);
+
+		// Destroy transactions.
+		if ( ! empty( $transactions ) ) {
+			foreach ( $transactions as $transaction ) {
+				edd_delete_order_transaction( $transaction->id );
+			}
+		}
+
+		// Get notes.
+		$notes = edd_get_notes(
+			array(
+				'object_id'   => $order_id,
+				'object_type' => 'order',
+				'number'      => 9999,
+			)
+		);
+
+		// Delete notes.
+		if ( ! empty( $notes ) ) {
+			foreach ( $notes as $note ) {
+				edd_delete_note( $note->id );
+			}
 		}
 
 		// Now look for any orders with the refund type.
-		$refund_orders = edd_get_orders( array(
-			'type'   => 'refund',
-			'parent' => $order_id,
-		) );
+		$refund_orders = edd_get_orders(
+			array(
+				'type'   => 'refund',
+				'parent' => $order_id,
+			)
+		);
 
 		if ( ! empty( $refund_orders ) ) {
-			foreach( $refund_orders as $refund ) {
+			foreach ( $refund_orders as $refund ) {
 				edd_destroy_order( $refund->id );
 			}
 		}
@@ -375,6 +435,7 @@ function edd_get_order( $order_id = 0 ) {
 
 	/**
 	 * If the order is not retrieved but migration is pending, check for an old payment.
+	 *
 	 * @todo remove in 3.1
 	*/
 	if ( ! $order instanceof EDD\Orders\Order && _edd_get_final_payment_id() ) {
@@ -421,9 +482,12 @@ function edd_get_order_by( $field = '', $value = '' ) {
 function edd_get_orders( $args = array() ) {
 
 	// Parse args
-	$r = wp_parse_args( $args, array(
-		'number' => 30,
-	) );
+	$r = wp_parse_args(
+		$args,
+		array(
+			'number' => 30,
+		)
+	);
 
 	// Instantiate a query object
 	$orders = new EDD\Database\Queries\Order();
@@ -446,9 +510,12 @@ function edd_get_orders( $args = array() ) {
 function edd_count_orders( $args = array() ) {
 
 	// Parse args
-	$r = wp_parse_args( $args, array(
-		'count' => true,
-	) );
+	$r = wp_parse_args(
+		$args,
+		array(
+			'count' => true,
+		)
+	);
 
 	// Query for count(s)
 	$orders = new EDD\Database\Queries\Order( $r );
@@ -471,11 +538,14 @@ function edd_count_orders( $args = array() ) {
 function edd_get_order_counts( $args = array() ) {
 
 	// Parse args
-	$r = wp_parse_args( $args, array(
-		'count'   => true,
-		'groupby' => 'status',
-		'type'    => 'sale'
-	) );
+	$r = wp_parse_args(
+		$args,
+		array(
+			'count'   => true,
+			'groupby' => 'status',
+			'type'    => 'sale',
+		)
+	);
 
 	// Query for count
 	$counts = new EDD\Database\Queries\Order( $r );
@@ -603,8 +673,8 @@ function edd_update_order_status( $order_id = 0, $new_status = '' ) {
 	}
 
 	// Backwards compatibility
-	$do_change = apply_filters( 'edd_should_update_payment_status', true,       $order_id, $new_status, $old_status );
-	$do_change = apply_filters( 'edd_should_update_order_status',   $do_change, $order_id, $new_status, $old_status );
+	$do_change = apply_filters( 'edd_should_update_payment_status', true, $order_id, $new_status, $old_status );
+	$do_change = apply_filters( 'edd_should_update_order_status', $do_change, $order_id, $new_status, $old_status );
 
 	$updated = false;
 
@@ -634,6 +704,7 @@ function edd_build_order( $order_data = array() ) {
 
 	// Bail if no order data passed.
 	if ( empty( $order_data ) ) {
+		edd_debug_log( 'No order data passed to edd_build_order' );
 		return false;
 	}
 
@@ -657,6 +728,8 @@ function edd_build_order( $order_data = array() ) {
 	}
 
 	if ( $resume_order ) {
+		$date                       = EDD()->utils->date( 'now' );
+		$order_data['date_created'] = $date->format( 'Y-m-d H:i:s' );
 		edd_add_note(
 			array(
 				'object_id'   => $order->id,
@@ -685,8 +758,10 @@ function edd_build_order( $order_data = array() ) {
 		if ( strtolower( $order->email ) !== strtolower( $order_data['user_info']['email'] ) ) {
 
 			// Remove the payment from the previous customer.
-			$previous_customer = new EDD_Customer( $order->customer_id );
-			$previous_customer->remove_payment( $order->id, false );
+			$previous_customer = edd_get_customer( $order->customer_id );
+			if ( $previous_customer ) {
+				$previous_customer->remove_payment( $order->id, false );
+			}
 
 			// Redefine the email first and last names.
 			edd_update_order(
@@ -700,7 +775,7 @@ function edd_build_order( $order_data = array() ) {
 		}
 	}
 
-	/** Setup order information ***********************************************/
+	/** Setup order information */
 
 	$gateway = ! empty( $order_data['gateway'] ) ? $order_data['gateway'] : '';
 	$gateway = empty( $gateway ) && isset( $_POST['edd-gateway'] ) // WPCS: CSRF ok.
@@ -730,12 +805,12 @@ function edd_build_order( $order_data = array() ) {
 		'date_created' => ! empty( $order_data['date_created'] ) ? $order_data['date_created'] : '',
 	);
 
-	/** Setup customer ********************************************************/
+	/** Setup customer */
 
-	$customer = new stdClass();
+	$customer = false;
 
 	if ( did_action( 'edd_pre_process_purchase' ) && is_user_logged_in() ) {
-		$customer = new EDD_Customer( get_current_user_id(), true );
+		$customer = edd_get_customer_by( 'user_id', get_current_user_id() );
 
 		// Customer is logged in but used a different email to purchase so we need to assign that email address to their customer record.
 		if ( ! empty( $customer->id ) && ( $order_args['email'] !== $customer->email ) ) {
@@ -743,27 +818,38 @@ function edd_build_order( $order_data = array() ) {
 		}
 	}
 
-	if ( empty( $customer->id ) ) {
-		$customer = new EDD_Customer( $order_args['email'] );
+	$name = '';
+	if ( ! empty( $order_data['user_info']['first_name'] ) ) {
+		$name = $order_data['user_info']['first_name'];
+	}
+	if ( ! empty( $order_data['user_info']['last_name'] ) ) {
+		$name .= ' ' . $order_data['user_info']['last_name'];
+	}
 
-		if ( empty( $order_data['user_info']['first_name'] ) && empty( $order_data['user_info']['last_name'] ) ) {
-			$name = $order_args['email'];
-		} else {
-			$name = trim( $order_data['user_info']['first_name'] . ' ' . $order_data['user_info']['last_name'] );
+	if ( ! $customer ) {
+		$customer = edd_get_customer_by( 'email', $order_args['email'] );
+
+		if ( ! $customer ) {
+			$customer_id = edd_add_customer(
+				array(
+					'name'    => $name ? $name : $order_args['email'],
+					'email'   => $order_args['email'],
+					'user_id' => $order_args['user_id'],
+				)
+			);
+			$customer    = $customer_id ?
+				edd_get_customer( $customer_id ) :
+				new EDD_Customer( $order_args['email'] );
 		}
-
-		$customer->create( array(
-			'name'    => $name,
-			'email'   => $order_args['email'],
-			'user_id' => $order_args['user_id'],
-		) );
 	}
 
 	// If the customer name was initially empty, update the record to store the name used at checkout.
-	if ( empty( $customer->name ) ) {
-		$customer->update( array(
-			'name' => $order_data['user_info']['first_name'] . ' ' . $order_data['user_info']['last_name'],
-		) );
+	if ( $customer && $name && empty( $customer->name ) ) {
+		$customer->update(
+			array(
+				'name' => $name,
+			)
+		);
 	}
 
 	$order_args['customer_id'] = $customer->id;
@@ -793,12 +879,11 @@ function edd_build_order( $order_data = array() ) {
 		// If no tax rate is found, then we'll save a percentage rate in order meta later.
 	}
 
-	/** Insert order **********************************************************/
+	/** Insert order */
 
 	// Add order into the edd_orders table.
 	if ( true === $resume_order ) {
 		$order_id = $order->id;
-		unset( $order_args['date_created'] );
 		edd_update_order( $order_id, $order_args );
 	} else {
 		$order_args['order_number'] = edd_set_order_number();
@@ -807,42 +892,38 @@ function edd_build_order( $order_data = array() ) {
 
 	// If there is no order ID at this point, something went wrong.
 	if ( empty( $order_id ) ) {
+		edd_debug_log( 'Failed to create order. Order data: ' . var_export( $order_args, true ) );
 		return false;
 	}
-	EDD()->session->set( 'edd_resume_payment', $order_id );
+
+	// If there is an active purchase session, store the order ID for later use.
+	if ( edd_get_purchase_session() ) {
+		EDD()->session->set( 'edd_resume_payment', $order_id );
+	}
 
 	// Attach order to the customer record.
 	$customer->attach_payment( $order_id, false );
 
-	// Declare variables to store amounts for the order.
-	$subtotal       = 0.00;
-	$total_tax      = 0.00;
-	$total_discount = 0.00;
-	$total_fees     = 0.00;
-	$order_total    = 0.00;
+	// Set $has_tax to false for now.
+	$has_tax = false;
 
-	/** Insert order address *************************************************/
+	/** Insert order address */
 
 	$order_data['user_info']['address'] = isset( $order_data['user_info']['address'] )
 		? $order_data['user_info']['address']
 		: array();
 
-	$order_data['user_info']['address'] = wp_parse_args( $order_data['user_info']['address'], array(
-		'line1'   => '',
-		'line2'   => '',
-		'city'    => '',
-		'zip'     => '',
-		'country' => '',
-		'state'   => '',
-	) );
-
-	$name = '';
-	if ( ! empty( $order_data['user_info']['first_name'] ) ) {
-		$name = $order_data['user_info']['first_name'];
-	}
-	if ( ! empty( $order_data['user_info']['last_name'] ) ) {
-		$name .= ' ' . $order_data['user_info']['last_name'];
-	}
+	$order_data['user_info']['address'] = wp_parse_args(
+		$order_data['user_info']['address'],
+		array(
+			'line1'   => '',
+			'line2'   => '',
+			'city'    => '',
+			'zip'     => '',
+			'country' => '',
+			'state'   => '',
+		)
+	);
 
 	$order_address_data = array(
 		'order_id'    => $order_id,
@@ -871,7 +952,12 @@ function edd_build_order( $order_data = array() ) {
 
 	edd_maybe_add_customer_address( $customer->id, $customer_address_data );
 
-	/** Insert order items ****************************************************/
+	if ( ! empty( $order_data['user_info']['address']['phone'] ) ) {
+		edd_add_order_meta( $order_id, '_edd_phone', sanitize_text_field( $order_data['user_info']['address']['phone'] ) );
+		edd_update_customer_meta( $customer->id, 'phone', sanitize_text_field( $order_data['user_info']['address']['phone'] ) );
+	}
+
+	/** Insert order items */
 
 	$decimal_filter = edd_currency_decimal_filter();
 
@@ -936,14 +1022,17 @@ function edd_build_order( $order_data = array() ) {
 			 * @param int   $download->ID    Download ID.
 			 */
 			$order_item_args = apply_filters( 'edd_payment_add_download_args', $order_item_args, $download->ID );
-			$order_item_args = wp_parse_args( $order_item_args, array(
-				'quantity'   => 1,
-				'price_id'   => null,
-				'amount'     => false,
-				'item_price' => false,
-				'discount'   => 0.00,
-				'tax'        => 0.00,
-			) );
+			$order_item_args = wp_parse_args(
+				$order_item_args,
+				array(
+					'quantity'   => 1,
+					'price_id'   => null,
+					'amount'     => false,
+					'item_price' => false,
+					'discount'   => 0.00,
+					'tax'        => 0.00,
+				)
+			);
 
 			// The item_price key could have been changed by a filter.
 			// This exists for backwards compatibility purposes.
@@ -992,10 +1081,10 @@ function edd_build_order( $order_data = array() ) {
 			}
 
 			// Sanitize all the amounts.
-			$order_item_args['amount']   = round( $item_price,                  $decimal_filter );
+			$order_item_args['amount']   = round( $item_price, $decimal_filter );
 			$order_item_args['subtotal'] = round( $order_item_args['subtotal'], $decimal_filter );
-			$order_item_args['tax']      = round( $order_item_args['tax'],      $decimal_filter );
-			$order_item_args['total']    = round( $total,                       $decimal_filter );
+			$order_item_args['tax']      = round( $order_item_args['tax'], $decimal_filter );
+			$order_item_args['total']    = round( $total, $decimal_filter );
 
 			$order_item_id = edd_add_order_item( $order_item_args );
 
@@ -1038,20 +1127,21 @@ function edd_build_order( $order_data = array() ) {
 					// Add the adjustment.
 					$adjustment_id = edd_add_order_adjustment( $adjustment_data );
 
-					$total_fees += $adjustment_data['subtotal'];
-					$total_tax  += $adjustment_data['tax'];
+					if ( ! empty( $adjustment_data['tax'] ) ) {
+						$has_tax = true;
+					}
 
 					edd_add_extra_fee_order_adjustment_meta( $adjustment_id, $fee );
 				}
 			}
 
-			$subtotal       += (float) $order_item_args['subtotal'];
-			$total_tax      += (float) $order_item_args['tax'];
-			$total_discount += (float) $order_item_args['discount'];
+			if ( ! $has_tax && ! empty( $order_item_args['tax'] ) ) {
+				$has_tax = true;
+			}
 		}
 	}
 
-	/** Insert order adjustments **********************************************/
+	/** Insert order adjustments */
 
 	// Insert fees.
 	$fees = edd_get_cart_fees();
@@ -1094,8 +1184,9 @@ function edd_build_order( $order_data = array() ) {
 			// Add the adjustment.
 			$adjustment_id = edd_add_order_adjustment( $args );
 
-			$total_fees += (float) $fee['amount'];
-			$total_tax  += $fee_tax;
+			if ( ! $has_tax && ! empty( $fee_tax ) ) {
+				$has_tax = true;
+			}
 
 			edd_add_extra_fee_order_adjustment_meta( $adjustment_id, $fee );
 		}
@@ -1105,7 +1196,6 @@ function edd_build_order( $order_data = array() ) {
 	$discounts = ! empty( $order_data['user_info']['discount'] )
 		? $order_data['user_info']['discount']
 		: array();
-
 
 	if ( ! is_array( $discounts ) ) {
 		/** @var string $discounts */
@@ -1144,15 +1234,8 @@ function edd_build_order( $order_data = array() ) {
 		}
 	}
 
-	// Calculate order total (this needs more flexibility)
-	$order_total =
-		  $subtotal       // Total of all items
-		- $total_discount // Total of all discounts
-		+ $total_tax      // Total of all taxes
-		+ $total_fees;    // Total of all fees
-
 	// If we have tax, but no tax rate, manually save the percentage.
-	if ( empty( $order_args['tax_rate_id'] ) && $total_tax > 0 ) {
+	if ( empty( $order_args['tax_rate_id'] ) && $has_tax ) {
 		$cart_tax_rate_percentage = edd_get_cart_tax_rate( $country, $region );
 		if ( ! empty( $cart_tax_rate_percentage ) ) {
 			if ( $cart_tax_rate_percentage > 0 && $cart_tax_rate_percentage < 1 ) {
@@ -1163,13 +1246,9 @@ function edd_build_order( $order_data = array() ) {
 		}
 	}
 
-	// Update the order with all of the newly computed values.
-	edd_update_order( $order_id, array(
-		'subtotal'     => $subtotal,
-		'tax'          => $total_tax,
-		'discount'     => $total_discount,
-		'total'        => $order_total,
-	) );
+	// Update the order with all of the order data.
+	$order = edd_get_order( $order_id );
+	$order->recalculate();
 
 	if ( edd_get_option( 'show_agree_to_terms', false ) && ! empty( $_POST['edd_agree_to_terms'] ) ) { // WPCS: CSRF ok.
 		$order_data['agree_to_terms_time'] = current_time( 'timestamp' );
@@ -1259,9 +1338,11 @@ function edd_clone_order( $order_id = 0, $clone_relationships = false, $args = a
 	$new_order_id = edd_add_order( $r );
 
 	if ( $clone_relationships ) {
-		$items = edd_get_order_items( array(
-			'order_id' => $order_id,
-		) );
+		$items = edd_get_order_items(
+			array(
+				'order_id' => $order_id,
+			)
+		);
 
 		if ( $items ) {
 			foreach ( $items as $item ) {
@@ -1285,10 +1366,12 @@ function edd_clone_order( $order_id = 0, $clone_relationships = false, $args = a
 					}
 				}
 
-				$adjustments = edd_get_order_adjustments( array(
-					'object_id'   => $item->id,
-					'object_type' => 'order_item',
-				) );
+				$adjustments = edd_get_order_adjustments(
+					array(
+						'object_id'   => $item->id,
+						'object_type' => 'order_item',
+					)
+				);
 
 				if ( $adjustments ) {
 					foreach ( $adjustments as $adjustment ) {
@@ -1317,10 +1400,12 @@ function edd_clone_order( $order_id = 0, $clone_relationships = false, $args = a
 			}
 		}
 
-		$adjustments = edd_get_order_adjustments( array(
-			'object_id'   => $order_id,
-			'object_type' => 'order',
-		) );
+		$adjustments = edd_get_order_adjustments(
+			array(
+				'object_id'   => $order_id,
+				'object_type' => 'order',
+			)
+		);
 
 		if ( $adjustments ) {
 			foreach ( $adjustments as $adjustment ) {

@@ -9,8 +9,8 @@
  * @since       1.0
  */
 
-// Exit if accessed directly
-defined( 'ABSPATH' ) || exit;
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || exit; // @codeCoverageIgnore
 
 /**
  * Returns a list of all available payment modes.
@@ -22,15 +22,15 @@ defined( 'ABSPATH' ) || exit;
 function edd_get_payment_modes() {
 	static $modes = null;
 
-	// Default, built-in gateways
+	// Default, built-in gateways.
 	if ( is_null( $modes ) ) {
 		$modes = array(
 			'live' => array(
-				'admin_label' => __( 'Live', 'easy-digital-downloads' )
+				'admin_label' => __( 'Live', 'easy-digital-downloads' ),
 			),
 			'test' => array(
-				'admin_label' => __( 'Test', 'easy-digital-downloads' )
-			)
+				'admin_label' => __( 'Test', 'easy-digital-downloads' ),
+			),
 		);
 	}
 
@@ -45,53 +45,7 @@ function edd_get_payment_modes() {
  * @return array $gateways All the available gateways.
  */
 function edd_get_payment_gateways() {
-	static $gateways = null;
-
-	// Default, built-in gateways
-	if ( is_null( $gateways ) ) {
-		$gateways = array(
-			'paypal_commerce' => array(
-				'admin_label'    => __( 'PayPal', 'easy-digital-downloads' ),
-				'checkout_label' => __( 'PayPal', 'easy-digital-downloads' ),
-				'supports'       => array(
-					'buy_now',
-				),
-				'icons'          => array(
-					'paypal',
-				),
-			),
-			/**
-			 * PayPal Standard is available only if it was used prior to 2.11 and the store owner hasn't
-			 * yet been onboarded to PayPal Commerce.
-			 *
-			 * @see \EDD\Gateways\PayPal\maybe_remove_paypal_standard()
-			 */
-			'paypal' => array(
-				'admin_label'    => __( 'PayPal Standard', 'easy-digital-downloads' ),
-				'checkout_label' => __( 'PayPal', 'easy-digital-downloads' ),
-				'supports'       => array(
-					'buy_now',
-				),
-				'icons'          => array(
-					'paypal',
-				),
-			),
-			'manual' => array(
-				'admin_label'    => __( 'Store Gateway', 'easy-digital-downloads' ),
-				'checkout_label' => __( 'Store Gateway', 'easy-digital-downloads' ),
-			),
-		);
-	}
-
-	$gateways = apply_filters( 'edd_payment_gateways', $gateways );
-
-	// Since Stripe is added via a filter still, move to the top.
-	if ( array_key_exists( 'stripe', $gateways ) ) {
-		$stripe_attributes = $gateways['stripe'];
-		unset( $gateways['stripe'] );
-
-		$gateways = array_merge( array( 'stripe' => $stripe_attributes ), $gateways );
-	}
+	$gateways = EDD\Gateways\Registry::get();
 
 	return (array) apply_filters( 'edd_payment_gateways', $gateways );
 }
@@ -101,69 +55,36 @@ function edd_get_payment_gateways() {
  *
  * @since 3.0
  *
- * @param array $gateways
+ * @param array $gateways The list of gateways to order.
  * @return array
  */
 function edd_order_gateways( $gateways = array() ) {
 
-	// Get the order option
+	// Get the order option.
 	$order = edd_get_option( 'gateways_order', '' );
 
-	// If order is set, enforce it
+	// If order is set, enforce it.
 	if ( ! empty( $order ) ) {
 		$order    = array_flip( explode( ',', $order ) );
 		$order    = array_intersect_key( $order, $gateways );
 		$gateways = array_merge( $order, $gateways );
 	}
 
-	// Return ordered gateways
+	// Return ordered gateways.
 	return $gateways;
 }
-add_filter( 'edd_payment_gateways',                     'edd_order_gateways', 99 );
+add_filter( 'edd_payment_gateways', 'edd_order_gateways', 99 );
 add_filter( 'edd_enabled_payment_gateways_before_sort', 'edd_order_gateways', 99 );
 
 /**
  * Returns a list of all enabled gateways.
  *
  * @since 1.0
- * @param  bool $sort If true, the default gateway will be first
+ * @param  bool $sort If true, the default gateway will be first.
  * @return array $gateway_list All the available gateways
-*/
+ */
 function edd_get_enabled_payment_gateways( $sort = false ) {
-	$gateways = edd_get_payment_gateways();
-	$enabled  = (array) edd_get_option( 'gateways', false );
-
-	$gateway_list = array();
-
-	foreach ( $gateways as $key => $gateway ) {
-		if ( isset( $enabled[ $key ] ) && 1 === (int) $enabled[ $key ] ) {
-			$gateway_list[ $key ] = $gateway;
-		}
-	}
-
-	/**
-	 * Filter the enabled payment gateways before the default is bumped to the
-	 * front of the array.
-	 *
-	 * @since 3.0
-	 *
-	 * @param array $gateway_list List of enabled payment gateways
-	 * @return array Array of sorted gateways
-	 */
-	$gateway_list = apply_filters( 'edd_enabled_payment_gateways_before_sort', $gateway_list );
-
-	// Reorder our gateways so the default is first
-	if ( true === $sort ) {
-		$default_gateway_id = edd_get_default_gateway();
-
-		// Only put default on top if it's active
-		if ( edd_is_gateway_active( $default_gateway_id ) ) {
-			$default_gateway = array( $default_gateway_id => $gateway_list[ $default_gateway_id ] );
-			unset( $gateway_list[ $default_gateway_id ] );
-
-			$gateway_list = array_merge( $default_gateway, $gateway_list );
-		}
-	}
+	$gateway_list = $sort ? EDD\Gateways\Registry::get_sorted() : EDD\Gateways\Registry::get_enabled();
 
 	return apply_filters( 'edd_enabled_payment_gateways', $gateway_list );
 }
@@ -175,12 +96,9 @@ function edd_get_enabled_payment_gateways( $sort = false ) {
  *
  * @param string $gateway Name of the gateway to check for.
  * @return boolean true if enabled, false otherwise.
-*/
+ */
 function edd_is_gateway_active( $gateway ) {
-	$gateways = edd_get_enabled_payment_gateways();
-	$retval   = array_key_exists( $gateway, $gateways );
-
-	return apply_filters( 'edd_is_gateway_active', $retval, $gateway, $gateways );
+	return EDD\Gateways\Registry::is_enabled( $gateway );
 }
 
 /**
@@ -191,9 +109,9 @@ function edd_is_gateway_active( $gateway ) {
  * @return string $default Default gateway ID.
  */
 function edd_get_default_gateway() {
-	$default = edd_get_option( 'default_gateway', 'paypal' );
+	$default = edd_get_option( 'default_gateway', 'stripe' );
 
-	// Use the first enabled one
+	// Use the first enabled one.
 	if ( ! edd_is_gateway_active( $default ) ) {
 		$gateways = edd_get_enabled_payment_gateways();
 		$gateways = array_keys( $gateways );
@@ -207,33 +125,50 @@ function edd_get_default_gateway() {
  * Returns the admin label for the specified gateway
  *
  * @since 1.0.8.3
+ * @since 3.3.5 Added optional $order parameter.
  *
- * @param string $gateway Name of the gateway to retrieve a label for
+ * @param string           $gateway Name of the gateway to retrieve a label for.
+ * @param EDD\Orders\Order $order   The order object (optional).
  * @return string Gateway admin label
  */
-function edd_get_gateway_admin_label( $gateway ) {
+function edd_get_gateway_admin_label( $gateway, $order = null ) {
 	$gateways = edd_get_payment_gateways();
 
 	$label = isset( $gateways[ $gateway ] )
 		? $gateways[ $gateway ]['admin_label']
 		: ucwords( $gateway );
 
-	return apply_filters( 'edd_gateway_admin_label', $label, $gateway );
+	/**
+	 * Filter the admin label for the specified gateway.
+	 *
+	 * @since 3.3.5 Added optional $order parameter.
+	 * @param string           $label   Checkout label for the gateway.
+	 * @param string           $gateway Name of the gateway to retrieve a label for.
+	 * @param EDD\Orders\Order $order   The order object.
+	 */
+	return apply_filters( 'edd_gateway_admin_label', $label, $gateway, $order );
 }
 
 /**
  * Returns the checkout label for the specified gateway.
  *
- * @since 1.0.8.5
- *
- * @param string $gateway Name of the gateway to retrieve a label for.
+ * @since 3.3.5 Added optional $order parameter.
+ * @param string           $gateway Name of the gateway to retrieve a label for.
+ * @param EDD\Orders\Order $order   The order object (optional).
  * @return string Checkout label for the gateway.
  */
-function edd_get_gateway_checkout_label( $gateway ) {
+function edd_get_gateway_checkout_label( $gateway, $order = null ) {
 	$gateways = edd_get_payment_gateways();
 	$label    = isset( $gateways[ $gateway ] ) ? $gateways[ $gateway ]['checkout_label'] : $gateway;
 
-	return apply_filters( 'edd_gateway_checkout_label', $label, $gateway );
+	/**
+	 * Filter the checkout label for the specified gateway.
+	 *
+	 * @param string           $label   Checkout label for the gateway.
+	 * @param string           $gateway Name of the gateway to retrieve a label for.
+	 * @param EDD\Orders\Order $order   The order object.
+	 */
+	return apply_filters( 'edd_gateway_checkout_label', $label, $gateway, $order );
 }
 
 /**
@@ -294,14 +229,16 @@ function edd_shop_supports_buy_now() {
  *
  * @since 1.7
  *
- * @param int   $download_id
- * @param array $options
- * @param int   $quantity
+ * @param int   $download_id The ID of the download being purchased.
+ * @param array $options     The options for the download.
+ * @param int   $quantity    The quantity of the download being purchased.
  *
- * @return mixed|void
+ * @return array $purchase_data The purchase data.
  */
 function edd_build_straight_to_gateway_data( $download_id = 0, $options = array(), $quantity = 1 ) {
-	$price_options = array();
+	$price_options = array(
+		'price_id' => null,
+	);
 
 	if ( empty( $options ) || ! edd_has_variable_prices( $download_id ) ) {
 		$price = edd_get_download_price( $download_id );
@@ -315,75 +252,62 @@ function edd_build_straight_to_gateway_data( $download_id = 0, $options = array(
 
 		$prices = edd_get_variable_prices( $download_id );
 
-		// Make sure a valid price ID was supplied
+		// Make sure a valid price ID was supplied.
 		if ( ! isset( $prices[ $price_id ] ) ) {
 			wp_die( __( 'The requested price ID does not exist.', 'easy-digital-downloads' ), __( 'Error', 'easy-digital-downloads' ), array( 'response' => 404 ) );
 		}
 
 		$price_options = array(
 			'price_id' => $price_id,
-			'amount'   => $prices[ $price_id ]['amount']
 		);
-		$price = $prices[ $price_id ]['amount'];
+		$price         = $prices[ $price_id ]['amount'];
 	}
 
-	// Set up Downloads array
+	// Set up Downloads array.
 	$downloads = array(
 		array(
 			'id'      => $download_id,
-			'options' => $price_options
-		)
+			'options' => $price_options,
+		),
 	);
 
-	// Set up Cart Details array
-	$cart_details = array(
-		array(
-			'name'        => get_the_title( $download_id ),
-			'id'          => $download_id,
-			'item_number' => array(
-				'id'      => $download_id,
-				'options' => $price_options
-			),
-			'tax'         => 0,
-			'discount'    => 0,
-			'item_price'  => $price,
-			'subtotal'    => ( $price * $quantity ),
-			'price'       => ( $price * $quantity ),
-			'quantity'    => $quantity,
-		)
-	);
-
-	if ( is_user_logged_in() ) {
-		$current_user = wp_get_current_user();
+	foreach ( $downloads as $download ) {
+		edd_add_to_cart( $download['id'], $download['options'] );
 	}
 
-	// Setup user information
+	// Setup user information.
 	$user_info = array(
-		'id'         => is_user_logged_in() ? get_current_user_id()         : -1,
-		'email'      => is_user_logged_in() ? $current_user->user_email     : '',
-		'first_name' => is_user_logged_in() ? $current_user->user_firstname : '',
-		'last_name'  => is_user_logged_in() ? $current_user->user_lastname  : '',
+		'id'         => 0,
+		'email'      => '',
+		'first_name' => '',
+		'last_name'  => '',
 		'discount'   => 'none',
-		'address'    => array()
+		'address'    => array(),
 	);
+	if ( is_user_logged_in() ) {
+		$current_user            = wp_get_current_user();
+		$user_info['id']         = $current_user->ID;
+		$user_info['email']      = $current_user->user_email;
+		$user_info['first_name'] = $current_user->user_firstname;
+		$user_info['last_name']  = $current_user->user_lastname;
+	}
 
-	// Setup purchase information
+	// Setup purchase information.
 	$purchase_data = array(
-		'downloads'    => $downloads,
+		'downloads'    => edd_get_cart_contents(),
 		'fees'         => edd_get_cart_fees(),
 		'subtotal'     => $price * $quantity,
 		'discount'     => 0,
 		'tax'          => 0,
 		'price'        => $price * $quantity,
-		'purchase_key' => strtolower( md5( uniqid() ) ),
+		'purchase_key' => edd_generate_order_payment_key( $user_info['email'] ),
 		'user_email'   => $user_info['email'],
-		'date'         => date( 'Y-m-d H:i:s', current_time( 'timestamp' ) ),
 		'user_info'    => $user_info,
 		'post_data'    => array(),
-		'cart_details' => $cart_details,
+		'cart_details' => edd_get_cart_content_details(),
 		'gateway'      => \EDD\Gateways\PayPal\paypal_standard_enabled() ? 'paypal' : 'paypal_commerce',
 		'buy_now'      => true,
-		'card_info'    => array()
+		'card_info'    => array(),
 	);
 
 	return apply_filters( 'edd_straight_to_gateway_purchase_data', $purchase_data );
@@ -395,8 +319,8 @@ function edd_build_straight_to_gateway_data( $download_id = 0, $options = array(
  * @since 1.0
  *
  * @param string $gateway     Name of the gateway.
- * @param array $payment_data All the payment data to be sent to the gateway.
-*/
+ * @param array  $payment_data All the payment data to be sent to the gateway.
+ */
 function edd_send_to_gateway( $gateway, $payment_data ) {
 	$payment_data['gateway_nonce'] = wp_create_nonce( 'edd-gateway' );
 
@@ -440,26 +364,26 @@ function edd_show_gateways() {
  */
 function edd_get_chosen_gateway() {
 
-	// Use the default gateway by default
+	// Use the default gateway by default.
 	$retval = edd_get_default_gateway();
 
-	// Get the chosen gateway
+	// Get the chosen gateway.
 	$chosen = isset( $_REQUEST['payment-mode'] )
 		? $_REQUEST['payment-mode']
 		: false;
 
-	// Sanitize the gateway
+	// Sanitize the gateway.
 	if ( false !== $chosen ) {
 		$chosen = preg_replace( '/[^a-zA-Z0-9-_]+/', '', $chosen );
 		$chosen = urldecode( $chosen );
 
-		// Set return value if gateway is active
+		// Set return value if gateway is active.
 		if ( ! empty( $chosen ) && edd_is_gateway_active( $chosen ) ) {
 			$retval = $chosen;
 		}
 	}
 
-	// Override to manual if no price
+	// Override to manual if no price.
 	if ( edd_get_cart_subtotal() <= 0 ) {
 		$retval = 'manual';
 	}
@@ -474,9 +398,9 @@ function edd_get_chosen_gateway() {
  *
  * @since 1.3.3
  *
- * @param string $title   Title of the log entry (default: empty)
- * @param string $message Message to store in the log entry (default: empty)
- * @param int    $parent  Parent log entry (default: 0)
+ * @param string $title   Title of the log entry (default: empty).
+ * @param string $message Message to store in the log entry (default: empty).
+ * @param int    $parent  Parent log entry (default: 0).
  *
  * @return int ID of the new log entry.
  */
@@ -496,10 +420,12 @@ function edd_record_gateway_error( $title = '', $message = '', $parent = 0 ) {
  * @return int Number of orders placed based on the gateway.
  */
 function edd_count_sales_by_gateway( $gateway_label = 'paypal', $status = 'complete' ) {
-	return edd_count_orders( array(
-		'gateway' => $gateway_label,
-		'status'  => $status,
-	) );
+	return edd_count_orders(
+		array(
+			'gateway' => $gateway_label,
+			'status'  => $status,
+		)
+	);
 }
 
 /**
@@ -643,4 +569,29 @@ function edd_get_gateway_settings_url( $gateway = '' ) {
 	}
 
 	return $gateway_settings_url;
+}
+
+/**
+ * Checks whether the current cart setup is supported. This is intended for subscription orders.
+ * If the cart contains multiple products and one of them is a subscription, we need to check
+ * if the gateway supports a mixed cart.
+ *
+ * @since 3.2.7
+ * @return bool
+ */
+function edd_gateway_supports_cart_contents( string $gateway ) {
+
+	// If the cart only contains a single item, the cart is supported.
+	if ( count( edd_get_cart_contents() ) === 1 ) {
+		return true;
+	}
+
+	// If Recurring isn't active, or if the cart doesn't contain a subscription, the cart is supported.
+	if ( ! function_exists( 'edd_recurring' ) || ! edd_recurring()->cart_contains_recurring() ) {
+		return true;
+	}
+
+	// If the cart is mixed and the gateway supports it, the cart is supported.
+	// Historically, mixed carts also support multiple subscriptions.
+	return in_array( 'mixed_cart', edd_get_gateway_supports( $gateway ), true );
 }

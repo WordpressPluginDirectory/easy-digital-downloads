@@ -4,17 +4,16 @@
  * Note: Do not move, rename, or delete this file as many extensions will attempt
  * to require it during an installation or upgrade process.
  *
- * @package     EDD
- * @subpackage  Admin/Upgrades
+ * @package     EDD\Admin\Upgrades
  * @copyright   Copyright (c) 2018, Easy Digital Downloads, LLC
  * @license     http://opensource.org/licenses/gpl-2.0.php GNU Public License
  * @since       1.3.1
  */
 
-// Exit if accessed directly
+// Exit if accessed directly.
 defined( 'ABSPATH' ) || exit;
 
-// edd_do_automatic upgrades is defined in includes/upgrades/functions.php
+// edd_do_automatic upgrades is defined in includes/upgrades/functions.php.
 add_action( 'admin_init', 'edd_do_automatic_upgrades' );
 
 /**
@@ -24,8 +23,8 @@ add_action( 'admin_init', 'edd_do_automatic_upgrades' );
  * @return void
  */
 function edd_show_upgrade_notices() {
-	// Don't show notices on the upgrades page
-	$page = wp_strip_all_tags( filter_input( INPUT_GET, 'page' ) );
+	// Don't show notices on the upgrades page.
+	$page = wp_strip_all_tags( filter_input( INPUT_GET, 'page', FILTER_SANITIZE_SPECIAL_CHARS ) );
 	if ( ! empty( $page ) && ( 'edd-upgrades' === $page ) ) {
 		return;
 	}
@@ -34,7 +33,7 @@ function edd_show_upgrade_notices() {
 		return;
 	}
 
-	// Sequential Orders was the first stepped upgrade, so check if we have a stalled upgrade
+	// Sequential Orders was the first stepped upgrade, so check if we have a stalled upgrade.
 	$resume_upgrade = edd_maybe_resume_upgrade();
 	if ( ! empty( $resume_upgrade ) ) {
 		EDD()->notices->add_notice(
@@ -52,13 +51,13 @@ function edd_show_upgrade_notices() {
 	} else {
 
 		// Include all 'Stepped' upgrade process notices in this else statement,
-		// to avoid having a pending, and new upgrade suggested at the same time
+		// to avoid having a pending, and new upgrade suggested at the same time.
 
 		if ( get_option( 'edd_upgrade_sequential' ) ) {
 			delete_option( 'edd_upgrade_sequential' );
 		}
 
-		/** 3.0 Upgrades ******************************************************/
+		/** 3.0 Upgrades */
 
 		// Check if we need to do any upgrades.
 		if ( ! edd_v30_is_migration_complete() ) {
@@ -94,7 +93,7 @@ function edd_show_upgrade_notices() {
 							<?php
 							printf(
 								wp_kses_post(
-									/* translators: 1. Opening strong tag; do not translate. 2. Closing strong tag; do not translate. */
+									/* translators: 1: Opening strong tag; do not translate. 2. Closing strong tag; do not translate. */
 									__( 'Easy Digital Downloads needs to upgrade the database. %1$sLearn more about this upgrade%2$s.', 'easy-digital-downloads' )
 								),
 								'<button class="button button-link" onClick="jQuery(this).parent().next(\'div\').slideToggle()">',
@@ -109,7 +108,7 @@ function edd_show_upgrade_notices() {
 							<p>
 								<?php
 								printf(
-									/* translators: 1. Opening strong/italics tag; do not translate. 2. Closing strong/italics tag; do not translate. */
+									/* translators: 1: Opening strong/italics tag; do not translate. 2. Closing strong/italics tag; do not translate. */
 									esc_html__( 'This is a %1$smandatory%2$s update that will migrate all Easy Digital Downloads data to custom database tables. This upgrade will provide better performance and scalability.', 'easy-digital-downloads' ),
 									'<strong><em>',
 									'</em></strong>'
@@ -119,7 +118,7 @@ function edd_show_upgrade_notices() {
 							<p>
 								<?php
 								printf(
-									/* translators: 1. Opening strong tag; do not translate. 2. Closing strong tag; do not translate. 3. Plural download label */
+									/* translators: 1: Opening strong tag; do not translate. 2. Closing strong tag; do not translate. 3. Plural download label */
 									esc_html__( '%1$sPlease back up your database before starting this upgrade.%2$s This upgrade routine will make irreversible changes to the database.', 'easy-digital-downloads' ),
 									'<strong>',
 									'</strong>'
@@ -129,7 +128,7 @@ function edd_show_upgrade_notices() {
 							<p>
 								<?php
 								printf(
-									/* translators: 1. Opening strong tag; do not translate. 2. Closing strong tag; do not translate. 3. Line break; do not translate. 4. CLI command example; do not translate. */
+									/* translators: 1: Opening strong tag; do not translate. 2. Closing strong tag; do not translate. 3. Line break; do not translate. 4. CLI command example; do not translate. */
 									esc_html__( '%1$sAdvanced User?%2$s This upgrade can also be run via WP-CLI with the following command:%3$s%3$s%4$s', 'easy-digital-downloads' ),
 									'<strong>',
 									'</strong>',
@@ -169,7 +168,7 @@ function edd_show_upgrade_notices() {
 				// The database version is the problem.
 				if ( version_compare( $database_version, '5.6', '<' ) ) {
 					$message .= ' ' . sprintf(
-						/* translators: 1. opening anchor tag, do not translate; 2. closing anchor tag, do not translate; 3. MySQL database version, do not translate */
+						/* translators: 1: opening anchor tag, do not translate, 2: closing anchor tag, do not translate, 3: MySQL database version, do not translate */
 						__( 'Please contact your host and ask them to upgrade your environment to meet our %1$sminimum technical requirements%2$s. Your MySQL version is %3$s and needs to be updated.', 'easy-digital-downloads' ),
 						'<a href="https://easydigitaldownloads.com/recommended-wordpress-hosting/">',
 						'</a>',
@@ -177,7 +176,7 @@ function edd_show_upgrade_notices() {
 					);
 				} else {
 					$message .= ' ' . sprintf(
-						/* translators: 1. opening anchor tag, do not translate; 2. closing anchor tag, do not translate */
+						/* translators: 1: opening anchor tag, do not translate, 2: closing anchor tag, do not translate */
 						__( '%1$sContact our support team%2$s for help with next steps.', 'easy-digital-downloads' ),
 						'<a href="https://easydigitaldownloads.com/support/">',
 						'</a>'
@@ -198,7 +197,7 @@ function edd_show_upgrade_notices() {
 		 * into the upgrades array in `edd_get_all_upgrades`.
 		 */
 
-		// End 'Stepped' upgrade process notices
+		// End 'Stepped' upgrade process notices.
 	}
 }
 add_action( 'admin_notices', 'edd_show_upgrade_notices' );
@@ -217,13 +216,13 @@ function edd_trigger_upgrades() {
 		return;
 	}
 
-	// Bail if user is not capable
+	// Bail if user is not capable.
 	if ( ! current_user_can( 'manage_shop_settings' ) ) {
 		delete_option( 'edd_doing_upgrade' );
 		die( 'complete' );
 	}
 
-	// Bail if nonce is not set
+	// Bail if nonce is not set.
 	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'edd-upgrade' ) ) {
 		delete_option( 'edd_doing_upgrade' );
 		die( 'complete' );
@@ -236,6 +235,7 @@ add_action( 'wp_ajax_edd_trigger_upgrades', 'edd_trigger_upgrades' );
 
 /**
  * For use when doing 'stepped' upgrade routines, to see if we need to start somewhere in the middle
+ *
  * @since 2.2.6
  * @return mixed   When nothing to resume returns false, otherwise starts the upgrade where it left off
  */
@@ -278,15 +278,15 @@ function edd_upgrade_render_v30_migration() {
 		}
 	}
 
-	$migration_complete = $number_complete === count( $upgrades );
+	$migration_complete = count( $upgrades ) === $number_complete;
 
 	/*
 	 * Determine if legacy data can be removed.
 	 * It can be if all upgrades except legacy data have been completed.
 	 */
-	$can_remove_legacy_data = array_key_exists( 'v30_legacy_data_removed', $upgrade_statuses ) && $upgrade_statuses[ 'v30_legacy_data_removed' ] !== true;
+	$can_remove_legacy_data = array_key_exists( 'v30_legacy_data_removed', $upgrade_statuses ) && true !== $upgrade_statuses['v30_legacy_data_removed'];
 	if ( $can_remove_legacy_data ) {
-		foreach( $upgrade_statuses as $upgrade_key => $status ) {
+		foreach ( $upgrade_statuses as $upgrade_key => $status ) {
 			if ( 'v30_legacy_data_removed' === $upgrade_key ) {
 				continue;
 			}
@@ -341,21 +341,23 @@ function edd_upgrade_render_v30_migration() {
 
 	<?php
 	// Only show the migration form if there are still upgrades to do.
-	if ( ! $can_remove_legacy_data ) : ?>
-	<form id="edd-v3-migration" class="edd-v3-migration" method="POST">
-		<p>
-			<label for="edd-v3-migration-confirmation">
-				<input type="checkbox" id="edd-v3-migration-confirmation" class="edd-v3-migration-confirmation" name="backup_confirmation" value="1">
-				<?php esc_html_e( 'I have secured a backup of my website data.', 'easy-digital-downloads' ); ?>
-			</label>
-		</p>
-		<input type="hidden" name="_wpnonce" value="<?php echo esc_attr( wp_create_nonce( 'edd_process_v3_upgrade' ) ); ?>">
-		<button type="submit" id="edd-v3-migration-button" class="button button-primary disabled" disabled>
-			<?php esc_html_e( 'Upgrade Easy Digital Downloads', 'easy-digital-downloads' ); ?>
-		</button>
-		<div class="edd-v3-migration-error edd-hidden"></div>
-	</form>
-	<?php endif
+	if ( ! $can_remove_legacy_data ) :
+		?>
+		<form id="edd-v3-migration" class="edd-v3-migration" method="POST">
+			<p>
+				<label for="edd-v3-migration-confirmation">
+					<input type="checkbox" id="edd-v3-migration-confirmation" class="edd-v3-migration-confirmation" name="backup_confirmation" value="1">
+					<?php esc_html_e( 'I have secured a backup of my website data.', 'easy-digital-downloads' ); ?>
+				</label>
+			</p>
+			<input type="hidden" name="_wpnonce" value="<?php echo esc_attr( wp_create_nonce( 'edd_process_v3_upgrade' ) ); ?>">
+			<button type="submit" id="edd-v3-migration-button" class="button button-primary disabled" disabled>
+				<?php esc_html_e( 'Upgrade Easy Digital Downloads', 'easy-digital-downloads' ); ?>
+			</button>
+			<div class="edd-v3-migration-error edd-hidden"></div>
+		</form>
+		<?php
+	endif;
 
 	/*
 	 * Progress is only shown immediately if the upgrade is in progress. Otherwise it's hidden by default
@@ -364,7 +366,8 @@ function edd_upgrade_render_v30_migration() {
 	?>
 	<div id="edd-migration-progress" <?php echo count( array_filter( $upgrade_statuses ) ) ? '' : 'class="edd-hidden"'; ?>>
 		<ul>
-			<?php foreach ( $upgrades as $upgrade_key => $upgrade_details ) :
+			<?php
+			foreach ( $upgrades as $upgrade_key => $upgrade_details ) :
 				// We skip the one to remove legacy data. We'll handle that separately later.
 				if ( 'v30_legacy_data_removed' === $upgrade_key ) {
 					continue;
@@ -433,7 +436,8 @@ function edd_v3_remove_legacy_data_form( $hide_wrapper_initially = false ) {
 		<p>
 			<?php
 			printf(
-				esc_html__( 'You can complete this step later by navigating to %sDownloads &raquo; Tools%s.', 'easy-digital-downloads' ),
+				/* translators: 1: Opening anchor tag; do not translate. 2: Closing anchor tag; do not translate. */
+				esc_html__( 'You can complete this step later by navigating to %1$sDownloads &raquo; Tools%2$s.', 'easy-digital-downloads' ),
 				'<a href="' . esc_url( edd_get_admin_url( array( 'page' => 'edd-tools' ) ) ) . '">',
 				'</a>'
 			);
@@ -479,19 +483,12 @@ function edd_v3_remove_legacy_data_form( $hide_wrapper_initially = false ) {
  */
 function edd_v3_remove_legacy_data_tool() {
 	// Tool not available if they've already done it.
-	if ( edd_has_upgrade_completed( 'v30_legacy_data_removed' ) ) {
+	if ( EDD\Upgrades\Utilities\MigrationCheck::is_legacy_data_removed() ) {
 		return;
 	}
 
-	$v3_upgrades = edd_get_v30_upgrades();
-	unset( $v3_upgrades['v30_legacy_data_removed'] );
-	$v3_upgrades = array_keys( $v3_upgrades );
-
-	// If even one upgrade hasn't completed, they cannot delete legacy data.
-	foreach( $v3_upgrades as $v3_upgrade ) {
-		if ( ! edd_has_upgrade_completed( $v3_upgrade ) ) {
-			return;
-		}
+	if ( ! EDD\Upgrades\Utilities\MigrationCheck::is_v30_migration_complete() ) {
+		return;
 	}
 	?>
 	<div class="postbox">
@@ -504,71 +501,6 @@ function edd_v3_remove_legacy_data_tool() {
 	<?php
 }
 add_action( 'edd_tools_recount_stats_after', 'edd_v3_remove_legacy_data_tool' );
-
-/**
- * Register batch processors for upgrade routines for EDD 3.0.
- *
- * @since 3.0
- */
-function edd_register_batch_processors_for_v30_upgrade() {
-	add_action( 'edd_batch_export_class_include', 'edd_load_batch_processors_for_v30_upgrade', 10, 1 );
-}
-add_action( 'edd_register_batch_exporter', 'edd_register_batch_processors_for_v30_upgrade', 10 );
-
-/**
- * Load the batch processor for upgrade routines for EDD 3.0.
- *
- * @param $class string Class name.
- */
-function edd_load_batch_processors_for_v30_upgrade( $class ) {
-	switch ( $class ) {
-		case 'EDD\Admin\Upgrades\v3\Orders':
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-base.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-data-migrator.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-orders.php';
-			break;
-		case 'EDD\Admin\Upgrades\v3\Customer_Addresses':
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-base.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-data-migrator.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-customer-addresses.php';
-			break;
-		case 'EDD\Admin\Upgrades\v3\Customer_Email_Addresses':
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-base.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-data-migrator.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-customer-email-addresses.php';
-			break;
-		case 'EDD\Admin\Upgrades\v3\Logs':
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-base.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-data-migrator.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-logs.php';
-			break;
-		case 'EDD\Admin\Upgrades\v3\Tax_Rates':
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-base.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-data-migrator.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-tax-rates.php';
-			break;
-		case 'EDD\Admin\Upgrades\v3\Discounts':
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-base.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-data-migrator.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-discounts.php';
-			break;
-		case 'EDD\Admin\Upgrades\v3\Order_Notes':
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-base.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-data-migrator.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-order-notes.php';
-			break;
-		case 'EDD\Admin\Upgrades\v3\Customer_Notes':
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-base.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-data-migrator.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-customer-notes.php';
-			break;
-		case 'EDD\Admin\Upgrades\v3\Remove_Legacy_Data':
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-base.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-data-migrator.php';
-			require_once  EDD_PLUGIN_DIR . 'includes/admin/upgrades/v3/class-remove-legacy-data.php';
-			break;
-	}
-}
 
 /**
  * Checks whether all 3.0 migrations have run, ignoring the legacy data removal.

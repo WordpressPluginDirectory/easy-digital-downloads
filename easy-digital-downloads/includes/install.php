@@ -96,25 +96,25 @@ function edd_run_install( $site_id = false ) {
 		return;
 	}
 
-	// Not switched
+	// Not switched.
 	$switched = false;
 
-	// Maybe switch to a site
+	// Maybe switch to a site.
 	if ( ! empty( $site_id ) ) {
 		switch_to_blog( $site_id );
 		$switched = true;
 	}
 
-	// Setup the components (customers, discounts, logs, etc...)
+	// Setup the components (customers, discounts, logs, etc...).
 	edd_setup_components();
 
-	// Setup the Downloads Custom Post Type
+	// Setup the Downloads Custom Post Type.
 	edd_setup_edd_post_types();
 
-	// Setup the Download Taxonomies
+	// Setup the Download Taxonomies.
 	edd_setup_download_taxonomies();
 
-	// Clear the permalinks
+	// Clear the permalinks.
 	flush_rewrite_rules( false );
 
 	// Install the default pages and settings.
@@ -124,7 +124,7 @@ function edd_run_install( $site_id = false ) {
 	// Set the activation date.
 	edd_get_activation_date();
 
-	// Create wp-content/uploads/edd/ folder and the .htaccess file
+	// Create wp-content/uploads/edd/ folder and the .htaccess file.
 	if ( ! function_exists( 'edd_create_protection_files' ) ) {
 		require_once EDD_PLUGIN_DIR . 'includes/admin/upload-functions.php';
 	}
@@ -132,23 +132,23 @@ function edd_run_install( $site_id = false ) {
 		edd_create_protection_files( true );
 	}
 
-	// Create EDD shop roles
+	// Create EDD shop roles.
 	EDD()->roles->add_roles();
 	EDD()->roles->add_caps();
 
-	// API version
+	// API version.
 	update_option( 'edd_default_api_version', 'v' . EDD()->api->get_version() );
 
-	// Check for PHP Session support, and enable if available
-	EDD()->session->use_php_sessions();
+	// Set session handling to database by default.
+	update_option( 'edd_session_handling', 'db' );
 
-	// Maybe set all upgrades as complete (only on fresh installation)
+	// Maybe set all upgrades as complete (only on fresh installation).
 	edd_set_all_upgrades_complete();
 
-	// Update the database version (must be at end, but before site restore)
+	// Update the database version (must be at end, but before site restore).
 	edd_do_automatic_upgrades();
 
-	// Maybe switch back
+	// Maybe switch back.
 	if ( true === $switched ) {
 		restore_current_blog();
 	}
@@ -185,17 +185,17 @@ function edd_set_all_upgrades_complete() {
  */
 function edd_install_pages() {
 
-	// Get all of the EDD settings
+	// Get all of the EDD settings.
 	$current_options = get_option( 'edd_settings', array() );
 
-	// Required store pages
+	// Required store pages.
 	$pages = edd_get_required_pages();
 
-	// Look for missing pages
+	// Look for missing pages.
 	$missing_pages  = array_diff_key( $pages, $current_options );
 	$pages_to_check = array_intersect_key( $current_options, $pages );
 
-	// Query for any existing pages
+	// Query for any existing pages.
 	$posts = new WP_Query(
 		array(
 			'include'   => array_values( $pages_to_check ),
@@ -204,16 +204,16 @@ function edd_install_pages() {
 		)
 	);
 
-	// Default value for checkout page
+	// Default value for checkout page.
 	$checkout = 0;
 
-	// We'll only update settings on change
+	// We'll only update settings on change.
 	$changed = false;
 
 	// Use the current user as the page author.
 	$user_id = get_current_user_id();
 
-	// Loop through all pages, fix or create any missing ones
+	// Loop through all pages, fix or create any missing ones.
 	foreach ( $pages as $page => $page_attributes ) {
 
 		$page_attributes = wp_parse_args(
@@ -228,20 +228,20 @@ function edd_install_pages() {
 
 		$page_id = ! empty( $pages_to_check[ $page ] ) ? $pages_to_check[ $page ] : false;
 
-		// Checks if the page option exists
+		// Checks if the page option exists.
 		$page_object = ! array_key_exists( $page, $missing_pages ) && ! empty( $posts->posts ) && ! empty( $page_id )
 			? get_post( $page_id )
 			: array();
 
-		// Skip if page exists
+		// Skip if page exists.
 		if ( ! empty( $page_object ) ) {
 
-			// Set the checkout page
+			// Set the checkout page.
 			if ( 'purchase_page' === $page ) {
 				$checkout = $page_object->ID;
 			}
 
-			// Skip if page exists
+			// Skip if page exists.
 			continue;
 		}
 
@@ -249,22 +249,22 @@ function edd_install_pages() {
 			$page_attributes['post_parent'] = $checkout;
 		}
 
-		// Create the new page
+		// Create the new page.
 		$new_page = wp_insert_post( $page_attributes );
 
-		// Update the checkout page ID
+		// Update the checkout page ID.
 		if ( 'purchase_page' === $page ) {
 			$checkout = $new_page;
 		}
 
-		// Set the page option
+		// Set the page option.
 		$current_options[ $page ] = $new_page;
 
-		// Pages changed
+		// Pages changed.
 		$changed = true;
 	}
 
-	// Update the option
+	// Update the option.
 	if ( true === $changed ) {
 		update_option( 'edd_settings', $current_options );
 	}
@@ -370,30 +370,6 @@ function edd_new_blog_created( $blog ) {
 	restore_current_blog();
 }
 add_action( 'wp_initialize_site', 'edd_new_blog_created' );
-
-/**
- * Drop our custom tables when a mu site is deleted
- *
- * @deprecated 3.0   Handled by WP_DB_Table
- * @since      2.5
- * @param      array $tables  The tables to drop
- * @param      int   $blog_id The Blog ID being deleted
- * @return     array          The tables to drop
- */
-function edd_wpmu_drop_tables( $tables, $blog_id ) {
-
-	switch_to_blog( $blog_id );
-	$customers_db     = new EDD_DB_Customers();
-	$customer_meta_db = new EDD_DB_Customer_Meta();
-	if ( $customers_db->installed() ) {
-		$tables[] = $customers_db->table_name;
-		$tables[] = $customer_meta_db->table_name;
-	}
-	restore_current_blog();
-
-	return $tables;
-
-}
 
 /**
  * Post-installation

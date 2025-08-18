@@ -8,6 +8,7 @@
  * @license     http://opensource.org/licenses/gpl-2.0.php GNU Public License
  * @since       3.0
  */
+
 namespace EDD\Reports;
 
 //
@@ -191,9 +192,21 @@ function get_reports() {
  * @return string The active report, or the 'overview' report if no view defined
  */
 function get_current_report() {
+	/**
+	 * Filters the default report view.
+	 *
+	 * Due to the reports being registered later on, we cannot validate this, however, the reports do gracefully fail
+	 * and redirect the user back to the `overview` report if someone supplies a bad value in the filter.
+	 *
+	 * @since 3.3.0
+	 *
+	 * @param string $default_report_view The default report view.
+	 */
+	$default_report_view = apply_filters( 'edd_default_report_view', 'overview' );
+
 	return isset( $_REQUEST['view'] )
 		? sanitize_key( $_REQUEST['view'] )
-		: 'overview'; // Hardcoded default
+		: $default_report_view;
 }
 
 /** Endpoints *****************************************************************/
@@ -347,7 +360,11 @@ function get_filters() {
 		'currencies'          => array(
 			'label'            => __( 'Currencies', 'easy-digital-downloads' ),
 			'display_callback' => __NAMESPACE__ . '\\display_currency_filter'
-		)
+		),
+		'order_statuses'      => array(
+			'label'            => __( 'Order Statuses', 'easy-digital-downloads' ),
+			'display_callback' => __NAMESPACE__ . '\\display_order_status_filter'
+		),
 	);
 
 	/**
@@ -391,8 +408,33 @@ function get_filter_value( $filter ) {
 	switch ( $filter ) {
 		// Handle dates.
 		case 'dates':
-			$default_range          = 'this_month';
-			$default_relative_range = 'previous_period';
+			/**
+			 * Default date range.
+			 *
+			 * @since 3.3.0
+			 *
+			 * @param string $default_range Default date range.
+			 */
+			$default_range = apply_filters( 'edd_reports_default_date_range', 'this_month' );
+
+			// If the default range is not valid, default to 'this_month'.
+			if ( ! array_key_exists( $default_range, get_dates_filter_options() ) ) {
+				$default_range = 'this_month';
+			}
+
+			/**
+			 * Default relative date range.
+			 *
+			 * @since 3.3.0
+			 *
+			 * @param string $default_relative_range Default relative date range.
+			 */
+			$default_relative_range = apply_filters( 'edd_reports_default_relative_date_range', 'previous_period' );
+
+			// If the default relative range is not valid, default to 'previous_period'.
+			if ( ! array_key_exists( $default_relative_range, get_relative_dates_filter_options() ) ) {
+				$default_relative_range = 'previous_period';
+			}
 
 			if ( ! isset( $_GET['range'] ) ) {
 				$dates   = parse_dates_for_range( $default_range );
@@ -636,7 +678,7 @@ function get_dates_filter( $values = 'strings', $timezone = null ) {
 function parse_dates_for_range( $range = null, $date = 'now', $convert_to_utc = true ) {
 
 	// Set the time ranges in the user's timezone, so they ultimately see them in their own timezone.
-	$date = EDD()->utils->date( $date, edd_get_timezone_id(), false );
+	$date = EDD()->utils->date( $date, null, true );
 
 	if ( null === $range || ! array_key_exists( $range, get_dates_filter_options() ) ) {
 		$range = get_dates_filter_range();
@@ -733,8 +775,8 @@ function parse_dates_for_range( $range = null, $date = 'now', $convert_to_utc = 
 			}
 
 			$dates = array(
-				'start' => EDD()->utils->date( $start, edd_get_timezone_id(), false )->startOfDay(),
-				'end'   => EDD()->utils->date( $end, edd_get_timezone_id(), false )->endOfDay(),
+				'start' => EDD()->utils->date( $start )->startOfDay(),
+				'end'   => EDD()->utils->date( $end )->endOfDay(),
 			);
 			break;
 	}
@@ -898,8 +940,6 @@ function get_relative_dates_filter_range() {
  * @return bool True if results should use hour by hour, otherwise false.
  */
 function get_dates_filter_hour_by_hour() {
-	$hour_by_hour = false;
-
 	// Retrieve the queried dates.
 	$dates = get_dates_filter( 'objects' );
 
@@ -909,16 +949,19 @@ function get_dates_filter_hour_by_hour() {
 		case 'yesterday':
 			$hour_by_hour = true;
 			break;
-		case 'this_week':
-		case 'this_month':
-		case 'this_quarter':
-		case 'this_year':
+
 		case 'other':
-			$difference = ( $dates['end']->getTimestamp() - $dates['start']->getTimestamp() );
+			$hour_by_hour = false;
+			$difference   = ( $dates['end']->getTimestamp() - $dates['start']->getTimestamp() );
 			if ( $difference <= ( DAY_IN_SECONDS * 2 ) ) {
 				$hour_by_hour = true;
 			}
 			break;
+
+		case 'this_week':
+		case 'this_month':
+		case 'this_quarter':
+		case 'this_year':
 		default:
 			$hour_by_hour = false;
 			break;
@@ -1277,7 +1320,13 @@ function default_display_charts_group( $report ) {
 	}
 	?>
 		<div class="chart-timezone">
-			<?php printf( esc_html__( 'Chart time zone: %s', 'easy-digital-downloads' ), esc_html( edd_get_timezone_id() ) ); ?>
+			<?php
+			printf(
+				/* translators: %s: Timezone ID */
+				esc_html__( 'Chart time zone: %s', 'easy-digital-downloads' ),
+				esc_html( edd_get_timezone_id() )
+			);
+			?>
 		</div>
 	</div>
 	<?php
@@ -1641,9 +1690,13 @@ function display_currency_filter() {
 
 	$all_currencies = array_intersect_key( edd_get_currencies(), array_flip( $order_currencies ) );
 	if ( array_key_exists( edd_get_currency(), $all_currencies ) ) {
-		$all_currencies = array_merge( array(
-			'convert' => sprintf( __( '%s - Converted', 'easy-digital-downloads' ), $all_currencies[ edd_get_currency() ] )
-		), $all_currencies );
+		$all_currencies = array_merge(
+			array(
+				/* translators: %s: Default currency of the store, in standard 3 character format (example: USD or EUR) */
+				'convert' => sprintf( __( '%s - Converted', 'easy-digital-downloads' ), $all_currencies[ edd_get_currency() ] ),
+			),
+			$all_currencies
+		);
 	}
 	?>
 	<span class="edd-graph-filter-options graph-option-section">
@@ -1656,6 +1709,40 @@ function display_currency_filter() {
 			'show_option_all'  => false,
 			'show_option_none' => false
 		) );
+		?>
+	</span>
+	<?php
+}
+
+/**
+ * Handles display of the 'Order Statuses' filter for reports.
+ *
+ * @since 3.3.6
+ */
+function display_order_status_filter() {
+	$statuses = edd_get_gross_order_statuses();
+	$status   = get_filter_value( 'order_statuses' );
+	?>
+	<span class="edd-graph-filter-options graph-option-section">
+		<?php
+		echo EDD()->html->select(
+			array(
+				'name'             => 'order_statuses',
+				'id'               => 'edd_reports_filter_order_statuses',
+				'options'          => array_combine(
+					$statuses,
+					array_map(
+						function ( $status ) {
+							return edd_get_payment_status_label( $status );
+						},
+						$statuses
+					)
+				),
+				'selected'          => $status,
+				'show_option_none'  => false,
+				'show_option_empty' => __( 'All order statuses', 'easy-digital-downloads' ),
+			)
+		);
 		?>
 	</span>
 	<?php
@@ -1803,4 +1890,31 @@ function compat_filter_date_range( $range ) {
 	return isset( $_REQUEST['range'] )
 		? sanitize_key( $_REQUEST['range'] )
 		: $range;
+}
+
+/**
+ * Gets a download label from a download data array.
+ *
+ * @since 3.2.8
+ * @param array $download_data
+ * @return string
+ */
+function get_download_label( $download_data = array() ) {
+	if ( empty( $download_data ) ) {
+		return '';
+	}
+	$download = edd_get_download( $download_data['download_id'] );
+	if ( ! $download ) {
+		return '';
+	}
+
+	if ( isset( $download_data['price_id'] ) && is_numeric( $download_data['price_id'] ) ) {
+		$args       = array( 'price_id' => $download_data['price_id'] );
+		$price_name = edd_get_price_name( $download->ID, $args );
+		if ( $price_name ) {
+			$download->post_title .= ': ' . $price_name;
+		}
+	}
+
+	return esc_html( ' (' . $download->post_title . ')' );
 }

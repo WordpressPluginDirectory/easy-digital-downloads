@@ -2,23 +2,29 @@
 /**
  * Easy Digital Downloads General Settings
  *
- * @package EDD
+ * @package     EDD
  * @subpackage  Settings
  * @copyright   Copyright (c) 2023, Easy Digital Downloads
  * @license     https://opensource.org/licenses/gpl-2.0.php GNU Public License
- * @since 3.1.4
+ * @since       3.1.4
  */
+
 namespace EDD\Admin\Settings\Tabs;
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * General settings tab class.
+ *
+ * @since 3.1.4
+ */
 class General extends Tab {
 
 	/**
 	 * Get the ID for this tab.
 	 *
 	 * @since 3.1.4
-	 * @return string
+	 * @var string
 	 */
 	protected $id = 'general';
 
@@ -107,13 +113,14 @@ class General extends Tab {
 				),
 			),
 			'pages'    => array(
-				'page_settings'         => array(
-					'id'            => 'page_settings',
-					'name'          => '<h3>' . __( 'Pages', 'easy-digital-downloads' ) . '</h3>',
-					'desc'          => '',
-					'type'          => 'header',
-					'tooltip_title' => __( 'Page Settings', 'easy-digital-downloads' ),
-					'tooltip_desc'  => __( 'Easy Digital Downloads uses the pages below for handling the display of checkout, purchase confirmation, purchase history, and purchase failures. If pages are deleted or removed in some way, they can be recreated manually from the Pages menu. When re-creating the pages, enter the shortcode shown in the page content area.', 'easy-digital-downloads' ),
+				'products_page'         => array(
+					'id'          => 'products_page',
+					'name'        => __( 'Shop Page', 'easy-digital-downloads' ),
+					'desc'        => __( 'This is the page that displays all of your products.', 'easy-digital-downloads' ),
+					'type'        => 'select',
+					'options'     => $pages,
+					'chosen'      => true,
+					'placeholder' => __( 'Select a page', 'easy-digital-downloads' ),
 				),
 				'purchase_page'         => array(
 					'id'          => 'purchase_page',
@@ -194,8 +201,8 @@ class General extends Tab {
 				),
 				'thousands_separator' => array(
 					'id'          => 'thousands_separator',
-					'name'        => __( 'Thousandths Separator', 'easy-digital-downloads' ),
-					'desc'        => __( 'The symbol to separate thousandths. Usually <code>,</code> or <code>.</code>.', 'easy-digital-downloads' ),
+					'name'        => __( 'Thousands Separator', 'easy-digital-downloads' ),
+					'desc'        => __( 'The symbol to separate thousands. Usually <code>,</code> or <code>.</code>.', 'easy-digital-downloads' ),
 					'type'        => 'text',
 					'size'        => 'small',
 					'field_class' => 'code',
@@ -214,7 +221,7 @@ class General extends Tab {
 				),
 			),
 			'api'      => array(
-				'api_settings'        => array(
+				'api_settings'               => array(
 					'id'            => 'api_settings',
 					'name'          => '<h3>' . __( 'API', 'easy-digital-downloads' ) . '</h3>',
 					'desc'          => '',
@@ -222,14 +229,15 @@ class General extends Tab {
 					'tooltip_title' => __( 'API Settings', 'easy-digital-downloads' ),
 					'tooltip_desc'  => __( 'The Easy Digital Downloads REST API provides access to store data through our API endpoints. Enable this setting if you would like all user accounts to be able to generate their own API keys.', 'easy-digital-downloads' ),
 				),
-				'api_allow_user_keys' => array(
+				'api_allow_user_keys'        => array(
 					'id'    => 'api_allow_user_keys',
 					'name'  => __( 'Allow User Keys', 'easy-digital-downloads' ),
-					'check' => __( 'Check this box to allow all users to generate API keys.', 'easy-digital-downloads' ),
+					'check' => __( 'Allow all users to generate API keys.', 'easy-digital-downloads' ),
 					'desc'  => __( 'Users who can <code>manage_shop_settings</code> are always allowed to generate keys.', 'easy-digital-downloads' ),
-					'type'  => 'checkbox_description',
+					'type'  => 'checkbox_toggle',
 				),
-				'api_help'            => array(
+				'enable_public_request_logs' => $this->get_enable_public_request_logs(),
+				'api_help'                   => array(
 					'id'   => 'api_help',
 					'desc' => sprintf(
 						/* translators: %s: API documentation URL */
@@ -245,6 +253,35 @@ class General extends Tab {
 					'type' => 'descriptive_text',
 				),
 			),
+		);
+	}
+
+	/**
+	 * Gets the disable public requests logs setting.
+	 *
+	 * @since 3.2.8
+	 * @return array
+	 */
+	private function get_enable_public_request_logs() {
+		$link = edd_get_admin_url(
+			array(
+				'page' => 'edd-tools',
+				'tab'  => 'logs',
+				'view' => 'api_requests',
+			)
+		);
+
+		return array(
+			'id'    => 'enable_public_request_logs',
+			'name'  => __( 'Request Logs', 'easy-digital-downloads' ),
+			'check' => __( 'Log public API requests.', 'easy-digital-downloads' ),
+			'desc'  => sprintf(
+				/* translators: 1: opening anchor tag, 2: closing anchor tag */
+				__( 'Authenticated requests to the EDD API are always logged. %1$sView the API request logs.%2$s', 'easy-digital-downloads' ),
+				'<a href="' . $link . '">',
+				'</a>'
+			),
+			'type'  => 'checkbox_toggle',
 		);
 	}
 }

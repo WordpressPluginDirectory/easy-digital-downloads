@@ -6,6 +6,11 @@
  * @since   2.8.0
  */
 
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || exit; // @codeCoverageIgnore
+
+use EDD\Utils\FileSystem;
+
 /**
  * Class EDD_Stripe_Rate_Limiting
  */
@@ -48,19 +53,8 @@ class EDD_Stripe_Rate_Limiting {
 	 * @since 2.6.19
 	 */
 	private function actions() {
-
-		// Setup the log file.
-		add_action( 'plugins_loaded', array( $this, 'setup_log_file' ), 11 );
-
-		// Maybe schedule the cron to clean up the log file.
-		add_action( 'init', array( $this, 'schedule_cleanup' ) );
-
-		// Hook into the scheduled cleanup.
-		add_action( 'edds_cleanup_rate_limiting_log', array( $this, 'cleanup_log' ) );
-
 		// Catch any recurring errors as they don't run through the main Stripe extension.
 		add_action( 'edd_before_purchase_form', array( $this, 'listen_for_recurring_card_errors' ), 0 );
-
 	}
 
 	/**
@@ -72,20 +66,6 @@ class EDD_Stripe_Rate_Limiting {
 
 		// Hide the purchase button if the visitor has hit the limit of errors.
 		add_filter( 'edd_checkout_button_purchase', array( $this, 'maybe_hide_purchase_button' ) );
-
-	}
-
-	/**
-	 * Schedule a cleanup of the card testing log entries.
-	 *
-	 * Runs every hour, and clears any card testing logs that are past expiration.
-	 *
-	 * @since 2.8.13
-	 */
-	public function schedule_cleanup() {
-		if ( ! wp_next_scheduled( 'edds_cleanup_rate_limiting_log' ) ) {
-			wp_schedule_event( time(), 'hourly', 'edds_cleanup_rate_limiting_log' );
-		}
 	}
 
 	/**
@@ -119,15 +99,20 @@ class EDD_Stripe_Rate_Limiting {
 	 * @return void
 	 */
 	public function setup_log_file() {
-
-		$upload_dir     = wp_upload_dir();
-		$this->filename = wp_hash( home_url( '/' ) ) . '-edd-stripe-rate-limiting.log';
-		$this->file     = trailingslashit( $upload_dir['basedir'] ) . $this->filename;
-
-		if ( ! is_writeable( $upload_dir['basedir'] ) ) {
-			$this->is_writable = false;
+		if ( ! empty( $this->file ) ) {
+			return;
 		}
 
+		$upload_dir     = edd_get_upload_dir();
+		$this->filename = wp_hash( home_url( '/' ) ) . '-edd-stripe-rate-limiting.log';
+		$this->file     = trailingslashit( $upload_dir ) . $this->filename;
+		if ( ! FileSystem::get_fs()->exists( $this->file ) ) {
+			FileSystem::maybe_move_file( $this->filename, $this->file );
+		}
+
+		if ( ! FileSystem::get_fs()->is_writable( $upload_dir ) ) {
+			$this->is_writable = false;
+		}
 	}
 
 	/**
@@ -234,7 +219,7 @@ class EDD_Stripe_Rate_Limiting {
 		if ( empty( $current_count ) ) {
 			$current_count = 1;
 		} else {
-			$current_count++;
+			++$current_count;
 		}
 
 		$this->update_rate_limiting_count( $blocking_id, $current_count );
@@ -269,7 +254,6 @@ class EDD_Stripe_Rate_Limiting {
 		$current_log[ $blocking_id ]['timeout'] = current_time( 'timestamp' ) + $expiration_in_seconds; // @codingStandardsIgnoreLine
 
 		$this->write_to_log( $current_log );
-
 	}
 
 	/**
@@ -326,7 +310,6 @@ class EDD_Stripe_Rate_Limiting {
 		}
 
 		return $purchase_button_markup;
-
 	}
 
 	/**
@@ -344,7 +327,6 @@ class EDD_Stripe_Rate_Limiting {
 		if ( isset( $errors['edd_recurring_stripe_error'] ) && ! empty( $errors['edd_recurring_stripe_error'] ) ) {
 			$this->increment_card_error_count();
 		}
-
 	}
 
 	/**
@@ -382,17 +364,18 @@ class EDD_Stripe_Rate_Limiting {
 	protected function get_file() {
 
 		$file = json_encode( array() );
+		$this->setup_log_file();
 
-		if ( @file_exists( $this->file ) ) {
+		if ( FileSystem::get_fs()->exists( $this->file ) ) {
 
-			if ( ! is_writeable( $this->file ) ) {
+			if ( ! FileSystem::get_fs()->is_writable( $this->file ) ) {
 				$this->is_writable = false;
 			}
 
-			$file = @file_get_contents( $this->file );
+			$file = FileSystem::get_fs()->get_contents( $this->file );
 		} else {
-			@file_put_contents( $this->file, $file ); // @codingStandardsIgnoreLine
-			@chmod( $this->file, 0664 ); // @codingStandardsIgnoreLine
+			FileSystem::get_fs()->put_contents( $this->file, $file );
+			FileSystem::get_fs()->chmod( $this->file, 0664 );
 		}
 
 		return $file;
@@ -416,7 +399,7 @@ class EDD_Stripe_Rate_Limiting {
 		$content = json_encode( $content );
 
 		if ( $this->is_writable ) {
-			@file_put_contents( $this->file, $content ); // @codingStandardsIgnoreLine
+			FileSystem::get_fs()->put_contents( $this->file, $content );
 		}
 	}
 
@@ -432,5 +415,4 @@ class EDD_Stripe_Rate_Limiting {
 			'easy-digital-downloads'
 		);
 	}
-
 }

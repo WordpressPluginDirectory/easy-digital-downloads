@@ -41,6 +41,7 @@ function edd_process_v3_upgrade() {
 	}
 
 	if ( ! array_key_exists( $upgrade_key, $all_upgrades ) ) {
+		/* translators: %s: Upgrade step name/key */
 		wp_send_json_error( sprintf( __( '"%s" is not a valid 3.0 upgrade.', 'easy-digital-downloads' ), $upgrade_key ) );
 	}
 
@@ -55,7 +56,6 @@ function edd_process_v3_upgrade() {
 	$class_name = $all_upgrades[ $upgrade_key ]['class'];
 
 	// Load the required classes.
-	require_once EDD_PLUGIN_DIR . 'includes/admin/reporting/export/class-batch-export.php';
 	do_action( 'edd_batch_export_class_include', $class_name );
 
 	if ( ! class_exists( $class_name ) ) {

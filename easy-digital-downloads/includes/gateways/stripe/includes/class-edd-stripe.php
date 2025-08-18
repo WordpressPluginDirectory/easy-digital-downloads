@@ -9,9 +9,9 @@
  */
 
 // Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
+defined( 'ABSPATH' ) || exit;
+
+use EDD\Utils\FileSystem;
 
 /**
  * EDD_Stripe class.
@@ -56,7 +56,7 @@ class EDD_Stripe {
 	 * Stripe Connect status class.
 	 *
 	 * @since 2.9.3
-	 * @var \EDD\Stripe\Connect
+	 * @var \EDD\Gateways\Stripe\Connect
 	 */
 	public $connect;
 
@@ -79,7 +79,6 @@ class EDD_Stripe {
 			self::$instance = new EDD_Stripe();
 			self::$instance->includes();
 			self::$instance->setup_classes();
-			self::$instance->filters();
 		}
 
 		return self::$instance;
@@ -128,7 +127,6 @@ class EDD_Stripe {
 				break;
 		}
 
-		require_once EDDS_PLUGIN_DIR . '/includes/webhooks.php';
 		require_once EDDS_PLUGIN_DIR . '/includes/scripts.php';
 		require_once EDDS_PLUGIN_DIR . '/includes/template-functions.php';
 		require_once EDDS_PLUGIN_DIR . '/includes/class-edd-stripe-rate-limiting.php';
@@ -172,25 +170,9 @@ class EDD_Stripe {
 			require_once EDDS_PLUGIN_DIR . '/includes/integrations/edd-all-access.php';
 		}
 
-		if ( class_exists( 'EDD_Auto_Register' ) ) {
+		if ( EDD\Checkout\AutoRegister::is_enabled() ) {
 			require_once EDDS_PLUGIN_DIR . '/includes/integrations/edd-auto-register.php';
 		}
-	}
-
-	/**
-	 * Applies various hooks.
-	 *
-	 * @since 2.6.0
-	 */
-	private function actions() {}
-
-	/**
-	 * Applies various filters.
-	 *
-	 * @since 2.6.0
-	 */
-	private function filters() {
-		add_filter( 'edd_payment_gateways', array( self::$instance, 'register_gateway' ) );
 	}
 
 	/**
@@ -210,11 +192,12 @@ class EDD_Stripe {
 	 * @since 2.9.3
 	 */
 	public function connect() {
-		if ( ! is_null( $this->connect ) ) {
+		if ( $this->connect instanceof EDD\Gateways\Stripe\Connect ) {
 			return $this->connect;
 		}
-		require_once EDDS_PLUGIN_DIR . '/includes/class-stripe-connect.php';
-		$this->connect = new EDD\Stripe\Connect();
+		class_alias( 'EDD\Gateways\Stripe\Connect', 'EDD\Stripe\Connect' );
+
+		$this->connect = new EDD\Gateways\Stripe\Connect();
 
 		return $this->connect;
 	}
@@ -222,6 +205,7 @@ class EDD_Stripe {
 	/**
 	 * Registers the gateway.
 	 *
+	 * @deprecated 3.3.9
 	 * @param array $gateways Payment gateways.
 	 * @return array
 	 */
@@ -277,7 +261,7 @@ class EDD_Stripe {
 
 		$possible_region_file = 'class-edd-stripe-region-' . $stripe_account_country . '.php';
 		$possible_region_path = EDDS_PLUGIN_DIR . 'includes/utils/regional-support/' . $possible_region_file;
-		if ( ! file_exists( $possible_region_path ) ) {
+		if ( ! FileSystem::file_exists( $possible_region_path ) ) {
 			return false;
 		}
 

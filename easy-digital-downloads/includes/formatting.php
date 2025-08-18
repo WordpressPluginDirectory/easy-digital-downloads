@@ -128,6 +128,9 @@ function edd_format_amount( $amount = 0, $decimals = true, $currency = '', $cont
 		case 'typed':
 			$return_value = $formatter->format_for_typed( $decimals )->typed_amount;
 			break;
+		case 'data':
+			$return_value = $formatter->format_for_data( $decimals )->data_amount;
+			break;
 		case 'display':
 		default:
 			$return_value = $formatter->format_for_display( $decimals )->amount;
@@ -152,12 +155,12 @@ function edd_format_amount( $amount = 0, $decimals = true, $currency = '', $cont
  */
 function edd_currency_filter( $price = '', $currency = '' ) {
 
-	// Fallback to default currency
+	// Fallback to default currency.
 	if ( empty( $currency ) ) {
 		$currency = edd_get_currency();
 	}
 
-	$currency = new \EDD\Currency\Currency( $currency );
+	$currency = new \EDD\Currency\Currency( esc_html( $currency ) );
 	if ( '' === $price ) {
 		return $currency->symbol;
 	}
@@ -305,7 +308,15 @@ function edd_get_allowed_tags() {
 			'class' => array(),
 			'id'    => array(),
 		),
+		'ol'     => array(
+			'class' => array(),
+			'id'    => array(),
+		),
 		'li'     => array(
+			'class' => array(),
+			'id'    => array(),
+		),
+		'blockquote' => array(
 			'class' => array(),
 			'id'    => array(),
 		),

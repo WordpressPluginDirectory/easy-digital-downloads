@@ -122,6 +122,7 @@ function edd_get_all_upgrades() {
 		'remove_refunded_sale_logs',
 		'update_file_download_log_data',
 		'migrate_order_actions_date', // Added in 3.2, migrates the order actions run date to the order table.
+		'discounts_start_end',
 	);
 	$edd_30_upgrades  = edd_get_v30_upgrades();
 
@@ -213,9 +214,10 @@ function edd_do_automatic_upgrades() {
 	 */
 	if ( EDD\Gateways\PayPal\has_rest_api_connection() && EDD\Gateways\PayPal\Webhooks\get_webhook_id() ) {
 		// Schedule a one time cron event to sync the webhooks.
-		if ( ! wp_next_scheduled( 'edd_paypal_commerce_sync_webhooks' ) ) {
-			wp_schedule_single_event( time() + ( 5 * MINUTE_IN_SECONDS ), 'edd_paypal_commerce_sync_webhooks' );
-		}
+		\EDD\Cron\Events\SingleEvent::add(
+			time() + ( 5 * MINUTE_IN_SECONDS ),
+			'edd_paypal_commerce_sync_webhooks'
+		);
 	}
 
 	/**

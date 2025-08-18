@@ -59,14 +59,25 @@ function get_personal_info_forms( $block_attributes, $customer_info_complete = t
  */
 function do_personal_info_forms( $block_attributes ) {
 	$customer               = \EDD\Blocks\Checkout\get_customer();
-	$customer_info_complete = true;
-	if ( is_user_logged_in() ) {
+	$customer_info_complete = is_user_logged_in();
+	if ( $customer_info_complete ) {
 		include EDD_BLOCKS_DIR . 'views/checkout/purchase-form/logged-in.php';
 
-		if ( ! empty( $customer['email'] ) && ! empty( $customer['first_name'] ) && ! has_action( 'edd_purchase_form_user_info_fields' ) ) {
+		$required_fields = array_keys( edd_purchase_form_required_fields() );
+		$customer_fields = array(
+			'email'      => 'edd_email',
+			'first_name' => 'edd_first',
+			'last_name'  => 'edd_last',
+		);
+		foreach ( $customer_fields as $field => $meta_key ) {
+			if ( empty( $customer[ $field ] ) && in_array( $meta_key, $required_fields, true ) ) {
+				$customer_info_complete = false;
+				break;
+			}
+		}
+		if ( $customer_info_complete && ! has_action( 'edd_purchase_form_user_info_fields' ) ) {
 			return;
 		}
-		$customer_info_complete = false;
 	}
 	?>
 	<div class="edd-blocks__checkout-user">
@@ -94,10 +105,14 @@ function do_personal_info_forms( $block_attributes ) {
 		}
 		$form = reset( $forms );
 		echo '<div class="edd-checkout-block__personal-info">';
-		if ( is_callable( $form['view'] ) ) {
-			echo call_user_func( $form['view'], array( 'current' => true ) );
+		if ( $form && ! empty( $form['view'] ) ) {
+			if ( is_callable( $form['view'] ) ) {
+				echo call_user_func( $form['view'], array( 'current' => true ) );
+			} elseif ( \EDD\Utils\FileSystem::file_exists( $form['view'] ) ) {
+				include $form['view'];
+			}
 		} else {
-			include $form['view'];
+			do_action( 'edd_purchase_form_user_info_fields', $customer );
 		}
 		?>
 		</div>
@@ -177,15 +192,23 @@ function swap_form() {
 	if ( empty( $forms[ $form_id ] ) ) {
 		return;
 	}
-	$form     = $forms[ $form_id ];
+	$form = $forms[ $form_id ];
+	if ( empty( $form['view'] ) ) {
+		wp_send_json_error( __( 'Unable to load form.', 'easy-digital-downloads' ) );
+	}
+
 	$customer = \EDD\Blocks\Checkout\get_customer();
 	if ( is_callable( $form['view'] ) ) {
 		wp_send_json_success( call_user_func( $form['view'], array( 'current' => true ) ) );
 	}
 
-	ob_start();
-	$form = include $form['view'];
-	wp_send_json_success( ob_get_clean() );
+	if ( \EDD\Utils\FileSystem::file_exists( $form['view'] ) ) {
+		ob_start();
+		include $form['view'];
+		wp_send_json_success( ob_get_clean() );
+	}
+
+	wp_send_json_error( __( 'Unable to load form.', 'easy-digital-downloads' ) );
 }
 
 /**
@@ -205,7 +228,7 @@ function get_forms() {
 			'view'  => EDD_BLOCKS_DIR . 'views/checkout/purchase-form/register.php',
 		),
 		'guest'    => array(
-			'label' => __( 'Check out as a guest', 'easy-digital-downloads' ),
+			'label' => __( 'Checkout as a guest', 'easy-digital-downloads' ),
 			'view'  => EDD_BLOCKS_DIR . 'views/checkout/purchase-form/personal-info.php',
 		),
 	);

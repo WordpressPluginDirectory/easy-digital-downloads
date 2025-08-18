@@ -102,11 +102,17 @@ function orders( $block_attributes = array() ) {
  * Renders the order confirmation block.
  *
  * @since 2.0
+ * @param array  $block_attributes The block attributes.
+ * @param string $content          The content of the block.
  * @return string
  */
-function confirmation( $block_attributes = array() ) {
+function confirmation( $block_attributes = array(), $content = '' ) {
 	$session = Functions\get_purchase_session();
-	if ( empty( $session['purchase_key'] ) ) {
+	$order   = false;
+	if ( ! empty( $session['purchase_key'] ) ) {
+		$order = edd_get_order_by( 'payment_key', $session['purchase_key'] );
+	}
+	if ( ! $order ) {
 		if ( Helpers\is_block_editor() ) {
 			return '<p class="edd-alert edd-alert-info">' . esc_html( __( 'To view a sample confirmation screen, you need to have at least one order in your store.', 'easy-digital-downloads' ) ) . '</p>';
 		}
@@ -133,7 +139,6 @@ function confirmation( $block_attributes = array() ) {
 	?>
 	<div class="<?php echo esc_attr( implode( ' ', array_filter( $classes ) ) ); ?>">
 		<?php
-		$order                  = edd_get_order_by( 'payment_key', $session['purchase_key'] );
 		$edd_receipt_args['id'] = $order->id;
 		include EDD_BLOCKS_DIR . 'views/orders/receipt-items.php';
 		include EDD_BLOCKS_DIR . 'views/orders/totals.php';
@@ -143,6 +148,7 @@ function confirmation( $block_attributes = array() ) {
 				<?php esc_html_e( 'View Order Details', 'easy-digital-downloads' ); ?>
 			</a>
 		</div>
+		<?php echo wp_kses_post( $content ); ?>
 	</div>
 	<?php
 
@@ -153,10 +159,11 @@ function confirmation( $block_attributes = array() ) {
  * Renders the full order receipt.
  *
  * @since 2.0
- * @param array $block_attributes
+ * @param array  $block_attributes The block attributes.
+ * @param string $content          The content of the block.
  * @return string
  */
-function receipt( $block_attributes = array() ) {
+function receipt( $block_attributes = array(), $content = '' ) {
 	global $edd_receipt_args;
 
 	$edd_receipt_args = wp_parse_args(
@@ -168,9 +175,10 @@ function receipt( $block_attributes = array() ) {
 		)
 	);
 	$payment_key      = Functions\get_payment_key();
+	$order            = edd_get_order_by( 'payment_key', $payment_key );
 
-	// No key found.
-	if ( ! $payment_key ) {
+	// No order found.
+	if ( ! $order ) {
 		if ( Helpers\is_block_editor() ) {
 			return '<p class="edd-alert edd-alert-info">' . esc_html( __( 'To view a sample receipt, you need to have at least one order in your store.', 'easy-digital-downloads' ) ) . '</p>';
 		}
@@ -181,7 +189,6 @@ function receipt( $block_attributes = array() ) {
 	ob_start();
 	edd_print_errors();
 
-	$order         = edd_get_order_by( 'payment_key', $payment_key );
 	$user_can_view = edd_can_view_receipt( $order );
 	if ( ! $user_can_view ) {
 		show_no_access_message( $order );
@@ -198,6 +205,7 @@ function receipt( $block_attributes = array() ) {
 		<?php
 		include EDD_BLOCKS_DIR . 'views/orders/totals.php';
 		maybe_show_receipt( $order );
+		echo wp_kses_post( $content );
 		?>
 	</div>
 	<?php
@@ -392,12 +400,14 @@ function get_purchased_products( $block_attributes ) {
 		'fields'     => 'ids',
 		'status__in' => \edd_get_complete_order_statuses(),
 		'number'     => 9999,
+		'type'       => 'sale',
 	);
 	if ( Helpers\is_block_editor() ) {
 		$args['number'] = 50;
 		unset( $args['user_id'] );
 	}
 	$order_ids = edd_get_orders( $args );
+
 	if ( empty( $order_ids ) ) {
 		return false;
 	}
@@ -592,7 +602,7 @@ function render_user_downloads_files_column( $action_args = array() ) {
 	foreach ( $action_args['download_files'] as $filekey => $file ) :
 		$order        = $action_args['order'];
 		$item         = $action_args['order_item'];
-		$download_url = edd_get_download_file_url( $order, $order->email, $filekey, $item->product_id, $item->price_id );
+		$download_url = edd_get_download_file_url( $item, $order->email, $filekey );
 		?>
 		<div class="edd-order-item__file">
 			<a href="<?php echo esc_url( $download_url ); ?>" class="edd-order-item__file-link">

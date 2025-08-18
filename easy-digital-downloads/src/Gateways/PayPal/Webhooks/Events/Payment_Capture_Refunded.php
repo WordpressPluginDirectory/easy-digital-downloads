@@ -49,7 +49,7 @@ class Payment_Capture_Refunded extends Webhook_Event {
 		$currency        = isset( $this->event->resource->amount->currency_code ) ? $this->event->resource->amount->currency_code : $order->currency;
 
 		$payment_note = sprintf(
-			/* Translators: %1$s - Amount refunded; %2$s - Original payment ID; %3$s - Refund transaction ID */
+			/* translators: 1:  Amount refunded; %2$s - Original payment ID; %3$s - Refund transaction ID */
 			esc_html__( 'Amount: %1$s; Payment transaction ID: %2$s; Refund transaction ID: %3$s', 'easy-digital-downloads' ),
 			edd_currency_filter( edd_format_amount( $refunded_amount ), $currency ),
 			esc_html( $order->get_transaction_id() ),
@@ -75,7 +75,9 @@ class Payment_Capture_Refunded extends Webhook_Event {
 					'content'     => __( 'Full refund processed in PayPal.', 'easy-digital-downloads' ) . ' ' . $payment_note,
 				)
 			);
+			add_filter( 'edd_is_order_refundable_by_override', '__return_true' );
 			$refund_id = edd_refund_order( $order->id );
+			remove_filter( 'edd_is_order_refundable_by_override', '__return_true' );
 			if ( $refund_id ) {
 				edd_add_order_transaction(
 					array(

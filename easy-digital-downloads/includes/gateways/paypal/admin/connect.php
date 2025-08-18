@@ -10,6 +10,9 @@
 
 namespace EDD\Gateways\PayPal\Admin;
 
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || exit; // @codeCoverageIgnore
+
 use EDD\Gateways\PayPal;
 use EDD\Gateways\PayPal\AccountStatusValidator;
 use EDD\Gateways\PayPal\API;
@@ -38,12 +41,15 @@ function connect_settings_field() {
 			<div class="notice notice-error inline">
 				<p>
 					<?php
-					echo wp_kses( sprintf(
-						/* Translators: %1$s opening <strong> tag; %2$s closing </strong> tag */
-						__( '%1$sPayPal Communication Error:%2$s We are having trouble communicating with PayPal at the moment. Please try again later, and if the issue persists, reach out to our support team.', 'easy-digital-downloads' ),
-						'<strong>',
-						'</strong>'
-					), array( 'strong' => array() ) );
+					echo wp_kses(
+						sprintf(
+						/* translators: 1. opening <strong> tag, 2. closing </strong> tag */
+							__( '%1$sPayPal Communication Error:%2$s We are having trouble communicating with PayPal at the moment. Please try again later, and if the issue persists, reach out to our support team.', 'easy-digital-downloads' ),
+							'<strong>',
+							'</strong>'
+						),
+						array( 'strong' => array() )
+					);
 					?>
 				</p>
 			</div>
@@ -52,7 +58,7 @@ function connect_settings_field() {
 			?>
 			<a type="button" target="_blank" id="edd-paypal-commerce-link" class="button button-secondary" href="<?php echo $onboarding_data['body']->signupLink; ?>&displayMode=minibrowser" data-paypal-onboard-complete="eddPayPalOnboardingCallback" data-paypal-button="true" data-paypal-onboard-button="true" data-nonce="<?php echo esc_attr( wp_create_nonce( 'edd_process_paypal_connect' ) ); ?>">
 				<?php
-				/* Translators: %s - the store mode, either `sandbox` or `live` */
+				/* translators: %s: the store mode, either `sandbox` or `live` */
 				printf( esc_html__( 'Connect with PayPal in %s mode', 'easy-digital-downloads' ), esc_html( $mode ) );
 				?>
 			</a>
@@ -66,10 +72,50 @@ function connect_settings_field() {
 		 * Show Account Info & Disconnect
 		 */
 		?>
-		<div id="edd-paypal-commerce-connect-wrap" class="edd-paypal-connect-account-info notice inline" data-nonce="<?php echo esc_attr( wp_create_nonce( 'edd_paypal_account_information' ) ); ?>">
-			<p>
-				<em><?php esc_html_e( 'Retrieving account information...', 'easy-digital-downloads' ); ?></em>
-				<span class="spinner is-active"></span>
+		<div id="edd-paypal-commerce-connect-wrap" class="edd-paypal-connect-account-info notice inline loading" data-nonce="<?php echo esc_attr( wp_create_nonce( 'edd_paypal_account_information' ) ); ?>">
+			<ul class="edd-paypal-account-status">
+				<li>
+					<span></span>
+				</li>
+				<li>
+					<span></span>
+				</li>
+				<li>
+					<span></span>
+						<ul class="edd-paypal-webhook-events">
+							<li>
+								<span></span>
+							</li>
+							<li>
+								<span></span>
+							</li>
+							<li>
+								<span></span>
+							</li>
+							<li>
+								<span></span>
+							</li>
+							<li>
+								<span></span>
+							</li>
+							<li>
+								<span></span>
+							</li>
+							<li>
+								<span></span>
+							</li>
+							<li>
+								<span></span>
+							</li>
+						</ul>
+				</li>
+				<li>
+					<span></span>
+				</li>
+			</ul>
+			<p class="edd-paypal-connect-actions">
+				<span></span>
+				<span></span>
 			</p>
 		</div>
 		<div id="edd-paypal-disconnect"></div>
@@ -118,7 +164,7 @@ function get_onboarding_data() {
 		}
 	}
 
-	$response = wp_remote_post(
+	$request = new \EDD\Utils\RemoteRequest(
 		EDD_PAYPAL_PARTNER_CONNECT_URL . 'signup-link',
 		array(
 			'headers'    => array(
@@ -133,21 +179,19 @@ function get_onboarding_data() {
 					'return_url'    => get_settings_url(),
 				)
 			),
+			'method'     => 'POST',
 		)
 	);
 
-	$code = wp_remote_retrieve_response_code( $response );
-
-	if ( is_wp_error( $response ) ) {
+	if ( is_wp_error( $request->response ) ) {
 
 		return array(
-			'code' => $code,
-			'body' => $response->get_error_message(),
+			'code' => $request->code,
+			'body' => $request->response->get_error_message(),
 		);
 	}
 
-	$body = wp_remote_retrieve_body( $response );
-	$body = json_decode( $body );
+	$body = json_decode( $request->body );
 
 	// We're storing an expiration so we can get a new one if it's been a day.
 	$body->expires = time() + DAY_IN_SECONDS;
@@ -156,7 +200,7 @@ function get_onboarding_data() {
 	update_option( 'edd_paypal_commerce_connect_details_' . $mode, wp_json_encode( $body ), false );
 
 	return array(
-		'code' => $code,
+		'code' => $request->code,
 		'body' => $body,
 	);
 }
@@ -178,12 +222,14 @@ function process_connect() {
 	$onboarding_data = get_onboarding_data();
 
 	if ( 200 !== intval( $onboarding_data['code'] ) ) {
-		wp_send_json_error( sprintf(
-		/* Translators: %d - HTTP response code; %s - Response from the API */
-			__( 'Unexpected response code: %d. Error: %s', 'easy-digital-downloads' ),
-			$onboarding_data['code'],
-			wp_json_encode( $onboarding_data['body'] )
-		) );
+		wp_send_json_error(
+			sprintf(
+			/* translators: 1: HTTP response code, 2: error message */
+				__( 'Unexpected response code: %1$d. Error: %2$s', 'easy-digital-downloads' ),
+				$onboarding_data['code'],
+				wp_json_encode( $onboarding_data['body'] )
+			)
+		);
 	}
 
 	if ( empty( $onboarding_data['body']->signupLink ) || empty( $onboarding_data['body']->nonce ) ) {
@@ -267,6 +313,13 @@ function get_and_save_credentials() {
 
 	$mode = edd_is_test_mode() ? PayPal\API::MODE_SANDBOX : PayPal\API::MODE_LIVE;
 
+	// Store a transient to indicate that we've started the connect process.
+	set_transient(
+		'edd_paypal_commerce_connect_started_' . $mode,
+		wp_hash( get_current_user_id() . '_' . $mode . '_started', 'nonce' ),
+		15 * MINUTE_IN_SECONDS
+	);
+
 	$partner_details = get_partner_details( $mode );
 	if ( empty( $partner_details->nonce ) ) {
 		wp_send_json_error( __( 'Missing nonce. Please refresh the page and try again.', 'easy-digital-downloads' ) );
@@ -275,40 +328,40 @@ function get_and_save_credentials() {
 	$paypal_subdomain = edd_is_test_mode() ? '.sandbox' : '';
 	$api_url          = 'https://api-m' . $paypal_subdomain . '.paypal.com/';
 	$api_args         = array(
-		'headers' => array(
+		'headers'    => array(
 			'Content-Type'  => 'application/x-www-form-urlencoded',
 			'Authorization' => sprintf( 'Basic %s', base64_encode( $_POST['share_id'] ) ),
 			'timeout'       => 15,
 		),
-		'body'    => array(
+		'body'       => array(
 			'grant_type'    => 'authorization_code',
 			'code'          => $_POST['auth_code'],
 			'code_verifier' => $partner_details->nonce,
 		),
 		'user-agent' => 'Easy Digital Downloads/' . EDD_VERSION . '; ' . get_bloginfo( 'name' ),
+		'method'     => 'POST',
 	);
 
 	/*
 	 * First get a temporary access token from PayPal.
 	 */
-	$response = wp_remote_post(
+	$request = new \EDD\Utils\RemoteRequest(
 		$api_url . 'v1/oauth2/token',
 		$api_args
 	);
 
-	if ( is_wp_error( $response ) ) {
-		wp_send_json_error( $response->get_error_message() );
+	if ( is_wp_error( $request->response ) ) {
+		wp_send_json_error( $request->response->get_error_message() );
 	}
 
-	$code = wp_remote_retrieve_response_code( $response );
-	$body = json_decode( wp_remote_retrieve_body( $response ) );
+	$body = json_decode( $request->body );
 
 	if ( empty( $body->access_token ) ) {
 		wp_send_json_error(
 			sprintf(
-				/* Translators: %d - HTTP response code */
+				/* translators: %d: HTTP response code */
 				__( 'Unexpected response from PayPal while generating token. Response code: %d. Please try again.', 'easy-digital-downloads' ),
-				$code
+				$request->code
 			)
 		);
 	}
@@ -317,28 +370,33 @@ function get_and_save_credentials() {
 	 * Now we can use this access token to fetch the seller's credentials for all future
 	 * API requests.
 	 */
-	$response = wp_remote_get( $api_url . 'v1/customer/partners/' . urlencode( \EDD\Gateways\PayPal\get_partner_merchant_id( $mode ) ) . '/merchant-integrations/credentials/', array(
-		'headers' => array(
-			'Authorization' => sprintf( 'Bearer %s', $body->access_token ),
-			'Content-Type'  => 'application/json',
-			'timeout'       => 15
-		),
-		'user-agent' => 'Easy Digital Downloads/' . EDD_VERSION . '; ' . get_bloginfo( 'name' ),
-	) );
+	$request = new \EDD\Utils\RemoteRequest(
+		$api_url . 'v1/customer/partners/' . urlencode( \EDD\Gateways\PayPal\get_partner_merchant_id( $mode ) ) . '/merchant-integrations/credentials/',
+		array(
+			'headers'    => array(
+				'Authorization' => sprintf( 'Bearer %s', $body->access_token ),
+				'Content-Type'  => 'application/json',
+				'timeout'       => 15,
+			),
+			'user-agent' => 'Easy Digital Downloads/' . EDD_VERSION . '; ' . get_bloginfo( 'name' ),
+		)
+	);
 
-	if ( is_wp_error( $response ) ) {
-		wp_send_json_error( $response->get_error_message() );
+	if ( is_wp_error( $request->response ) ) {
+		wp_send_json_error( $request->response->get_error_message() );
 	}
 
-	$code = wp_remote_retrieve_response_code( $response );
-	$body = json_decode( wp_remote_retrieve_body( $response ) );
+	$code = $request->code;
+	$body = json_decode( $request->body );
 
 	if ( empty( $body->client_id ) || empty( $body->client_secret ) ) {
-		wp_send_json_error( sprintf(
-		/* Translators: %d - HTTP response code */
-			__( 'Unexpected response from PayPal. Response code: %d. Please try again.', 'easy-digital-downloads' ),
-			$code
-		) );
+		wp_send_json_error(
+			sprintf(
+			/* translators: %d: HTTP response code */
+				__( 'Unexpected response from PayPal. Response code: %d. Please try again.', 'easy-digital-downloads' ),
+				$code
+			)
+		);
 	}
 
 	edd_update_option( 'paypal_' . $mode . '_client_id', sanitize_text_field( $body->client_id ) );
@@ -382,14 +440,14 @@ function get_account_info() {
 	try {
 		$status         = 'success';
 		$account_status = '';
-		$actions = array(
+		$actions        = array(
 			'refresh_merchant' => '<button type="button" class="button edd-paypal-connect-action" data-nonce="' . esc_attr( wp_create_nonce( 'edd_check_merchant_status' ) ) . '" data-action="edd_paypal_commerce_check_merchant_status">' . esc_html__( 'Re-Check Payment Status', 'easy-digital-downloads' ) . '</button>',
-			'webhook'          => '<button type="button" class="button edd-paypal-connect-action" data-nonce="' . esc_attr( wp_create_nonce( 'edd_update_paypal_webhook' ) ) . '" data-action="edd_paypal_commerce_update_webhook">' . esc_html__( 'Sync Webhook', 'easy-digital-downloads' ) . '</button>'
+			'webhook'          => '<button type="button" class="button edd-paypal-connect-action" data-nonce="' . esc_attr( wp_create_nonce( 'edd_update_paypal_webhook' ) ) . '" data-action="edd_paypal_commerce_update_webhook">' . esc_html__( 'Sync Webhook', 'easy-digital-downloads' ) . '</button>',
 		);
 
 		$disconnect_links = array(
-			'disconnect' => '<a class="button-secondary" id="edd-paypal-disconnect-link" href="' . esc_url( get_disconnect_url() ) . '">' . __( "Disconnect webhooks from PayPal", "easy-digital-downloads" ) . '</a>',
-			'delete'     => '<a class="button-secondary" id="edd-paypal-delete-link" href="' . esc_url( get_delete_url() ) . '">' . __( "Delete connection with PayPal", "easy-digital-downloads" ) . '</a>',
+			'disconnect' => '<a class="button-secondary" id="edd-paypal-disconnect-link" href="' . esc_url( get_disconnect_url() ) . '">' . __( 'Disconnect webhooks from PayPal', 'easy-digital-downloads' ) . '</a>',
+			'delete'     => '<a class="button-secondary" id="edd-paypal-delete-link" href="' . esc_url( get_delete_url() ) . '">' . __( 'Delete connection with PayPal', 'easy-digital-downloads' ) . '</a>',
 		);
 
 		$validator = new AccountStatusValidator();
@@ -402,12 +460,12 @@ function get_account_info() {
 		if ( $validator->errors_for_credentials->errors ) {
 			$rest_api_dashicon = 'no';
 			$status            = 'error';
-			$rest_api_message  .= $validator->errors_for_credentials->get_error_message();
+			$rest_api_message .= $validator->errors_for_credentials->get_error_message();
 		} else {
 			$rest_api_dashicon = 'yes';
 			$mode_string       = edd_is_test_mode() ? __( 'sandbox', 'easy-digital-downloads' ) : __( 'live', 'easy-digital-downloads' );
 
-			/* Translators: %s - the connected mode, either `sandbox` or `live` */
+			/* translators: %s: the connected mode, either `sandbox` or `live` */
 			$rest_api_message .= sprintf( __( 'Your PayPal account is successfully connected in %s mode.', 'easy-digital-downloads' ), $mode_string );
 		}
 
@@ -425,16 +483,16 @@ function get_account_info() {
 		 */
 		$merchant_account_message = '<strong>' . __( 'Payment Status:', 'easy-digital-downloads' ) . '</strong>' . ' ';
 		if ( $validator->errors_for_merchant_account->errors ) {
-			$merchant_dashicon        = 'no';
-			$status                   = 'error';
+			$merchant_dashicon         = 'no';
+			$status                    = 'error';
 			$merchant_account_message .= __( 'You need to address the following issues before you can start receiving payments:', 'easy-digital-downloads' );
 
 			// We can only refresh the status if we have a merchant ID.
-			if ( in_array( 'missing_merchant_details', $validator->errors_for_merchant_account->get_error_codes() ) ) {
+			if ( in_array( 'missing_merchant_details', $validator->errors_for_merchant_account->get_error_codes(), true ) ) {
 				unset( $actions['refresh_merchant'] );
 			}
 		} else {
-			$merchant_dashicon        = 'yes';
+			$merchant_dashicon         = 'yes';
 			$merchant_account_message .= __( 'Ready to accept payments.', 'easy-digital-downloads' );
 		}
 
@@ -461,16 +519,16 @@ function get_account_info() {
 		if ( $validator->errors_for_webhook->errors ) {
 			$webhook_dashicon = 'no';
 			$status           = ( 'success' === $status ) ? 'warning' : $status;
-			$webhook_message  .= $validator->errors_for_webhook->get_error_message();
+			$webhook_message .= $validator->errors_for_webhook->get_error_message();
 
-			if ( in_array( 'webhook_missing', $validator->errors_for_webhook->get_error_codes() ) ) {
+			if ( in_array( 'webhook_missing', $validator->errors_for_webhook->get_error_codes(), true ) ) {
 				unset( $disconnect_links['disconnect'] );
 				$actions['webhook'] = '<button type="button" class="button edd-paypal-connect-action" data-nonce="' . esc_attr( wp_create_nonce( 'edd_create_paypal_webhook' ) ) . '" data-action="edd_paypal_commerce_create_webhook">' . esc_html__( 'Create Webhooks', 'easy-digital-downloads' ) . '</button>';
 			}
 		} else {
 			unset( $disconnect_links['delete'] );
 			$webhook_dashicon = 'yes';
-			$webhook_message  .= __( 'Webhook successfully configured for the following events:', 'easy-digital-downloads' );
+			$webhook_message .= __( 'Webhook successfully configured for the following events:', 'easy-digital-downloads' );
 		}
 
 		ob_start();
@@ -482,8 +540,8 @@ function get_account_info() {
 				<ul class="edd-paypal-webhook-events">
 					<?php foreach ( array_keys( PayPal\Webhooks\get_webhook_events() ) as $event_name ) : ?>
 						<li>
-							<span class="dashicons dashicons-<?php echo in_array( $event_name, $validator->enabled_webhook_events ) ? 'yes' : 'no'; ?>"></span>
-							<span class="edd-paypal-webhook-event-name"><?php echo esc_html( $event_name ); ?></span>
+							<span class="dashicons dashicons-<?php echo in_array( $event_name, $validator->enabled_webhook_events, true ) ? 'yes' : 'no'; ?>"></span>
+							<span><?php echo esc_html( $event_name ); ?></span>
 						</li>
 					<?php endforeach; ?>
 				</ul>
@@ -494,7 +552,7 @@ function get_account_info() {
 
 		if ( ! edd_is_gateway_active( 'paypal_commerce' ) ) {
 			$account_status .= sprintf(
-				/* Translators: %1$s opening anchor tag; %2$s closing anchor tag; %3$s: opening line item/status/strong tags; %4$s closing strong tag; %5$s: closing list item tag */
+				/* translators: %1$s opening anchor tag; %2$s closing anchor tag; %3$s: opening line item/status/strong tags; %4$s closing strong tag; %5$s: closing list item tag */
 				__( '%3$sGateway Status: %4$s PayPal is not currently active. %1$sEnable PayPal%2$s in the general gateway settings to start using it.%5$s', 'easy-digital-downloads' ),
 				'<a href="' . esc_url( admin_url( 'edit.php?post_type=download&page=edd-settings&tab=gateways&section=main' ) ) . '">',
 				'</a>',
@@ -504,21 +562,24 @@ function get_account_info() {
 			);
 		}
 
-		wp_send_json_success( array(
-			'status'           => $status,
-			'account_status'   => '<ul class="edd-paypal-account-status edd-settings__list--disc">' . $account_status . '</ul>',
-			'webhook_object'   => isset( $validator ) ? $validator->webhook : null,
-			'actions'          => array_values( $actions ),
-			'disconnect_links' => array_values( $disconnect_links ),
-		) );
+		wp_send_json_success(
+			array(
+				'status'           => $status,
+				'account_status'   => '<ul class="edd-paypal-account-status">' . $account_status . '</ul>',
+				'webhook_object'   => isset( $validator ) ? $validator->webhook : null,
+				'actions'          => array_values( $actions ),
+				'disconnect_links' => array_values( $disconnect_links ),
+			)
+		);
 	} catch ( \Exception $e ) {
-		wp_send_json_error( array(
-			'status'  => isset( $status ) ? $status : 'error',
-			'message' => wpautop( $e->getMessage() )
-		) );
+		wp_send_json_error(
+			array(
+				'status'  => isset( $status ) ? $status : 'error',
+				'message' => wpautop( $e->getMessage() ),
+			)
+		);
 	}
 }
-
 add_action( 'wp_ajax_edd_paypal_commerce_get_account_info', __NAMESPACE__ . '\get_account_info' );
 
 /**
@@ -531,7 +592,7 @@ function get_disconnect_url() {
 	return wp_nonce_url(
 		add_query_arg(
 			array(
-				'edd_action' => 'disconnect_paypal_commerce'
+				'edd_action' => 'disconnect_paypal_commerce',
 			),
 			admin_url()
 		),
@@ -549,7 +610,7 @@ function get_delete_url() {
 	return wp_nonce_url(
 		add_query_arg(
 			array(
-				'edd_action' => 'delete_paypal_commerce'
+				'edd_action' => 'delete_paypal_commerce',
 			),
 			admin_url()
 		),
@@ -583,19 +644,18 @@ function process_disconnect() {
 			// This only deletes the webhooks in PayPal, we do not remove the webhook ID in EDD until we delete the connection.
 			PayPal\Webhooks\delete_webhook( $mode );
 		} catch ( \Exception $e ) {
-
+			// We don't want to stop the process if we can't delete the webhooks.
 		}
 
 		// Also delete the token cache key, to ensure we fetch a fresh one if they connect to a different account later.
 		delete_option( $api->token_cache_key );
 	} catch ( \Exception $e ) {
-
+		// We don't want to stop the process if we can't delete the webhook.
 	}
 
 	wp_safe_redirect( esc_url_raw( get_settings_url() ) );
 	exit;
 }
-
 add_action( 'edd_disconnect_paypal_commerce', __NAMESPACE__ . '\process_disconnect' );
 
 /**
@@ -630,13 +690,13 @@ function process_delete() {
 			// This only deletes the webhooks in PayPal, we do not remove the webhook ID in EDD until we delete the connection.
 			PayPal\Webhooks\delete_webhook( $mode );
 		} catch ( \Exception $e ) {
-
+			// We don't want to stop the process if we can't delete the webhooks.
 		}
 
 		// Also delete the token cache key, to ensure we fetch a fresh one if they connect to a different account later.
 		delete_option( $api->token_cache_key );
 	} catch ( \Exception $e ) {
-
+		// We don't want to stop the process if we can't delete the webhooks.
 	}
 
 	// Now delete our webhook ID.
@@ -660,13 +720,13 @@ function process_delete() {
 	wp_safe_redirect( esc_url_raw( get_settings_url() ) );
 	exit;
 }
-
 add_action( 'edd_delete_paypal_commerce', __NAMESPACE__ . '\process_delete' );
 
 /**
  * AJAX callback for refreshing payment status.
  *
  * @since 2.11
+ * @throws \Exception If the merchant ID is not found.
  */
 function refresh_merchant_status() {
 	check_ajax_referer( 'edd_check_merchant_status' );
@@ -694,7 +754,6 @@ function refresh_merchant_status() {
 		wp_send_json_error( esc_html( $e->getMessage() ) );
 	}
 }
-
 add_action( 'wp_ajax_edd_paypal_commerce_check_merchant_status', __NAMESPACE__ . '\refresh_merchant_status' );
 
 /**
@@ -717,7 +776,6 @@ function create_webhook() {
 		wp_send_json_error( esc_html( $e->getMessage() ) );
 	}
 }
-
 add_action( 'wp_ajax_edd_paypal_commerce_create_webhook', __NAMESPACE__ . '\create_webhook' );
 
 /**
@@ -740,7 +798,6 @@ function update_webhook() {
 		wp_send_json_error( esc_html( $e->getMessage() ) );
 	}
 }
-
 add_action( 'wp_ajax_edd_paypal_commerce_update_webhook', __NAMESPACE__ . '\update_webhook' );
 
 /**
@@ -752,79 +809,114 @@ add_action( 'wp_ajax_edd_paypal_commerce_update_webhook', __NAMESPACE__ . '\upda
  *
  * @since 2.11
  */
-add_action( 'admin_init', function () {
-	if ( ! isset( $_GET['merchantIdInPayPal'] ) || ! edd_is_admin_page( 'settings' ) ) {
-		return;
+add_action(
+	'load-download_page_edd-settings',
+	function () {
+		if ( ! isset( $_GET['merchantIdInPayPal'] ) || ! edd_is_admin_page( 'settings' ) ) {
+			return;
+		}
+
+		$mode            = edd_is_test_mode() ? 'sandbox' : 'live';
+		$connect_process = get_transient( 'edd_paypal_commerce_connect_started_' . $mode );
+		if ( empty( $connect_process ) ) {
+			return;
+		}
+		$check = wp_hash( get_current_user_id() . '_' . $mode . '_started', 'nonce' );
+
+		if ( ! hash_equals( $connect_process, $check ) ) {
+			wp_die(
+				__( 'There was an error processing the connection to PayPal. Please attempt to connect again.', 'easy-digital-downloads' ),
+				__( 'Error', 'easy-digital-downloads' ),
+				array(
+					'response'  => 403,
+					'link_text' => __( 'Return to settings', 'easy-digital-downloads' ),
+					'link_url'  => get_settings_url(),
+				)
+			);
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die(
+				__( 'You do not have permission to perform this action.', 'easy-digital-downloads' ),
+				__( 'Error', 'easy-digital-downloads' ),
+				array( 'response' => 403 )
+			);
+		}
+
+		edd_debug_log( 'PayPal Connect - Checking merchant status.' );
+
+		$merchant_id = urldecode( $_GET['merchantIdInPayPal'] );
+
+		try {
+			$details = get_merchant_status( $merchant_id );
+			edd_debug_log( 'PayPal Connect - Successfully retrieved merchant status.' );
+		} catch ( \Exception $e ) {
+			/*
+			 * This won't be enough to actually validate the merchant status, but we want to ensure
+			 * we save the merchant ID no matter what.
+			 */
+			$details = array(
+				'merchant_id' => $merchant_id,
+			);
+
+			edd_debug_log( sprintf( 'PayPal Connect - Failed to retrieve merchant status from PayPal. Error: %s', $e->getMessage() ) );
+		}
+
+		$merchant_account = new PayPal\MerchantAccount( $details );
+		$merchant_account->save();
+
+		// Remove our transient, instead of waiting for it to be removed automatically.
+		delete_transient( 'edd_paypal_commerce_connect_started_' . $mode );
+
+		edd_redirect( esc_url_raw( get_settings_url() ) );
 	}
-
-	if ( ! current_user_can( 'manage_options' ) ) {
-		wp_die( __( 'You do not have permission to perform this action.', 'easy-digital-downloads' ), __( 'Error', 'easy-digital-downloads' ), array( 'response' => 403 ) );
-	}
-
-	edd_debug_log( 'PayPal Connect - Checking merchant status.' );
-
-	$merchant_id = urldecode( $_GET['merchantIdInPayPal'] );
-
-	try {
-		$details = get_merchant_status( $merchant_id );
-		edd_debug_log( 'PayPal Connect - Successfully retrieved merchant status.' );
-	} catch ( \Exception $e ) {
-		/*
-		 * This won't be enough to actually validate the merchant status, but we want to ensure
-		 * we save the merchant ID no matter what.
-		 */
-		$details = array(
-			'merchant_id' => $merchant_id
-		);
-
-		edd_debug_log( sprintf( 'PayPal Connect - Failed to retrieve merchant status from PayPal. Error: %s', $e->getMessage() ) );
-	}
-
-	$merchant_account = new PayPal\MerchantAccount( $details );
-	$merchant_account->save();
-
-	wp_safe_redirect( esc_url_raw( get_settings_url() ) );
-	exit;
-} );
+);
 
 /**
  * Retrieves the merchant's status in PayPal.
  *
- * @param string $merchant_id
- * @param string $nonce
+ * @param string $merchant_id The merchant ID to check.
+ * @param string $nonce       The nonce to use for the request.
  *
  * @return array
- * @throws PayPal\Exceptions\API_Exception
+ * @throws PayPal\Exceptions\API_Exception If the request fails.
  */
 function get_merchant_status( $merchant_id, $nonce = '' ) {
-	$response = wp_remote_post( EDD_PAYPAL_PARTNER_CONNECT_URL . 'merchant-status', array(
-		'headers' => array(
-			'Content-Type' => 'application/json',
+	$api = new API();
+
+	$response = $api->make_request(
+		sprintf(
+			'v1/customer/partners/%s/merchant-integrations/%s',
+			\EDD\Gateways\PayPal\get_partner_merchant_id(),
+			$merchant_id
 		),
-		'body'    => json_encode( array(
-			'mode'        => edd_is_test_mode() ? API::MODE_SANDBOX : API::MODE_LIVE,
-			'merchant_id' => $merchant_id,
-			'nonce'       => $nonce
-		) ),
-		'user-agent' => 'Easy Digital Downloads/' . EDD_VERSION . '; ' . get_bloginfo( 'name' ),
-	) );
+		array(),
+		array(),
+		'GET'
+	);
 
-	$response_code = wp_remote_retrieve_response_code( $response );
-	$response_body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-	if ( 200 !== (int) $response_code ) {
-		if ( ! empty( $response_body['error'] ) ) {
-			$error_message = $response_body['error'];
-		} else {
-			$error_message = sprintf(
-				'Invalid HTTP response code: %d. Response: %s',
-				$response_code,
-				wp_remote_retrieve_body( $response )
-			);
-		}
-
-		throw new PayPal\Exceptions\API_Exception( $error_message, $response_code );
+	if ( 200 === (int) $api->last_response_code ) {
+		return $response;
 	}
 
-	return $response_body;
+	$response = (array) $response;
+
+	if ( ! empty( $response['error'] ) ) {
+		$error_message = $response['error'];
+	} elseif ( ! empty( $response['message'] ) ) {
+		$error_message = $response['message'];
+	} else {
+		$error_message = sprintf(
+			'Invalid HTTP response code: %d. Response: %s',
+			$api->last_response_code,
+			$response
+		);
+	}
+
+	// If the response code is a string, we'll default to a 403 because the API Exception requires an integer.
+	if ( ! is_int( $api->last_response_code ) ) {
+		throw new PayPal\Exceptions\API_Exception( $error_message, 403 );
+	}
+
+	throw new PayPal\Exceptions\API_Exception( $error_message, $api->last_response_code );
 }

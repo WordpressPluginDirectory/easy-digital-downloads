@@ -74,17 +74,108 @@ function edds_get_stripe_checkout_locale() {
 }
 
 /**
- * Sets the $_COOKIE global when a logged in cookie is available.
+ * Given a transaction ID, generate a link to the Stripe transaction ID details
  *
- * We need the global to be immediately available so calls to wp_create_nonce()
- * within the same session will use the newly available data.
- *
- * @since 2.8.0
- *
- * @link https://wordpress.stackexchange.com/a/184055
- *
- * @param string $logged_in_cookie The logged-in cookie value.
+ * @since  1.9.1
+ * @param  string $transaction_id The Transaction ID
+ * @param  int    $payment_id     The payment ID for this transaction
+ * @return string                 A link to the Stripe transaction details
  */
-function edds_set_logged_in_cookie_global( $logged_in_cookie ) {
-	$_COOKIE[ LOGGED_IN_COOKIE ] = $logged_in_cookie;
+function edd_stripe_link_transaction_id( $transaction_id, $payment_id ) {
+
+	$order = edd_get_order( $payment_id );
+	$test  = 'test' === $order->mode ? 'test/' : '';
+
+	if ( 'preapproval' === $order->status ) {
+		$url = '<a href="https://dashboard.stripe.com/' . esc_attr( $test ) . 'setup_intents/' . esc_attr( $transaction_id ) . '" target="_blank">' . esc_html( $transaction_id ) . '</a>';
+	} else {
+		$url = '<a href="https://dashboard.stripe.com/' . esc_attr( $test ) . 'payments/' . esc_attr( $transaction_id ) . '" target="_blank">' . esc_html( $transaction_id ) . '</a>';
+	}
+	return apply_filters( 'edd_stripe_link_payment_details_transaction_id', $url );
 }
+add_filter( 'edd_payment_details_transaction_id-stripe', 'edd_stripe_link_transaction_id', 10, 2 );
+
+/**
+ * Modifies the checkout label for a specific gateway in Easy Digital Downloads Pro.
+ *
+ * @param string $label The original checkout label.
+ * @param string $gateway The gateway being used for the checkout.
+ * @param object $order The order object.
+ * @return string The modified checkout label.
+ */
+function edds_gateway_checkout_label( $label, $gateway, $order ) {
+	if ( 'stripe' !== $gateway || empty( $order ) ) {
+		return $label;
+	}
+
+	$type = edd_get_order_meta( $order->id, 'stripe_payment_method_type', true );
+	if ( ! $type ) {
+		return $label;
+	}
+
+	$type_label = EDD\Gateways\Stripe\PaymentMethods::get_label( $type );
+	if ( $type_label ) {
+		if ( 'edd_gateway_admin_label' === current_filter() ) {
+			return $label . ' (' . $type_label . ')';
+		}
+
+		return $type_label;
+	}
+
+	return $label;
+}
+add_filter( 'edd_gateway_checkout_label', 'edds_gateway_checkout_label', 10, 3 );
+add_filter( 'edd_gateway_admin_label', 'edds_gateway_checkout_label', 10, 3 );
+
+
+/**
+ * When redirecting to the Stripe success screen outside of a purchase session,
+ * show the correct content.
+ *
+ * @since 3.3.5
+ * @param string $content
+ * @return string
+ */
+function edds_success_page_content( $content ) {
+	ob_start();
+
+	// If the status is set, show the processing template. Likely a bank transfer.
+	if ( ! empty( $_GET['status'] ) ) {
+		edd_get_template_part( 'payment', 'processing' );
+		edd_empty_cart();
+	} else {
+		// Authenticated offsite (Cash App, etc).
+		edd_get_template_part( 'stripe', 'success' );
+	}
+
+	return ob_get_clean();
+}
+add_filter( 'edd_payment_confirm_stripe', 'edds_success_page_content' );
+
+/**
+ * When getting the deprecated billing fields setting, extrapolate it from the new setting.
+ *
+ * @since 3.3.8
+ * @param string $value         The current value of the setting.
+ * @param string $setting       The setting key.
+ * @param mixed  $default_value The default value for the setting.
+ * @return string
+ */
+function edds_get_billing_fields( $value, $setting, $default_value ) {
+	$new_checkout_fields = edd_get_option( 'checkout_address_fields', false );
+	if ( false === $new_checkout_fields ) {
+		return $value ?? $default_value;
+	}
+
+	$new_checkout_fields = array_keys( array_filter( $new_checkout_fields ) );
+	if ( empty( $new_checkout_fields ) ) {
+		return 'none';
+	}
+
+	if ( 2 === count( $new_checkout_fields ) && in_array( 'zip', $new_checkout_fields, true ) && in_array( 'country', $new_checkout_fields, true ) ) {
+		return 'zip_country';
+	}
+
+	return 'full';
+}
+add_filter( 'edd_get_option_stripe_billing_fields', 'edds_get_billing_fields', 10, 3 );

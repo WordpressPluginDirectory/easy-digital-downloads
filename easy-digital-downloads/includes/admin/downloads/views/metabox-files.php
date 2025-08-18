@@ -11,7 +11,7 @@ $files = edd_get_download_files( $post_id );
 	<div id="edd_file_fields_default" class="edd_meta_table_wrap">
 		<div class="widefat edd_repeatable_table">
 
-			<div class="edd-file-fields edd-repeatables-wrap">
+			<div class="edd-file-fields edd-repeatables-wrap edd-handle-actions__group">
 				<?php
 
 				if ( ! empty( $files ) && is_array( $files ) ) :
@@ -23,17 +23,19 @@ $files = edd_get_download_files( $post_id );
 						$thumbnail_size = isset( $value['thumbnail_size'] ) ? $value['thumbnail_size'] : '';
 						$attachment_id  = isset( $value['attachment_id'] ) ? absint( $value['attachment_id'] ) : false;
 
-						$args = apply_filters( 'edd_file_row_args', compact( 'name', 'file', 'condition', 'attachment_id', 'thumbnail_size' ), $value ); ?>
+						$args = apply_filters( 'edd_file_row_args', compact( 'name', 'file', 'condition', 'attachment_id', 'thumbnail_size' ), $value );
+						?>
 
-						<div class="edd_repeatable_upload_wrapper edd_repeatable_row" data-key="<?php echo esc_attr( $key ); ?>">
+						<div class="edd_repeatable_upload_wrapper edd_repeatable_row edd-has-handle-actions" data-key="<?php echo esc_attr( $key ); ?>">
 							<?php do_action( 'edd_render_file_row', $key, $args, $post_id, $index ); ?>
 						</div>
 
 						<?php
 					endforeach;
-				else : ?>
+				else :
+					?>
 
-					<div class="edd_repeatable_upload_wrapper edd_repeatable_row">
+					<div class="edd_repeatable_upload_wrapper edd_repeatable_row edd-has-handle-actions" data-key="1">
 						<?php do_action( 'edd_render_file_row', 1, array(), $post_id, 0 ); ?>
 					</div>
 
@@ -42,7 +44,7 @@ $files = edd_get_download_files( $post_id );
 			</div>
 
 			<div class="edd-add-repeatable-row">
-				<button class="button-secondary edd_add_repeatable"><?php esc_html_e( 'Add New File', 'easy-digital-downloads' ); ?></button>
+				<button type="button" class="button-secondary edd_add_repeatable"><?php esc_html_e( 'Add File', 'easy-digital-downloads' ); ?></button>
 			</div>
 		</div>
 	</div>

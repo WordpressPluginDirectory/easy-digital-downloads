@@ -7,10 +7,18 @@
  * @license   GPL2+
  * @since     3.1.1
  */
-namespace EDD\Telemetry;
 
+namespace EDD\Telemetry;
 use EDD\Admin\Pass_Manager;
 
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || exit;
+
+/**
+ * Class Stats
+ *
+ * @since 3.1.1
+ */
 class Stats {
 
 	/**
@@ -29,6 +37,8 @@ class Stats {
 			'onboarding_started'   => get_option( 'edd_onboarding_started' ),
 			'onboarding_completed' => get_option( 'edd_onboarding_completed' ),
 			'products'             => $this->get_product_count(),
+			'categories'           => $this->get_category_count(),
+			'tags'                 => $this->get_tag_count(),
 			'pass_id'              => $this->get_pass_id(),
 		);
 	}
@@ -58,7 +68,7 @@ class Stats {
 	 * Converts a timestamp value to a date string for consistent dates.
 	 *
 	 * @since 3.1.1
-	 * @param string $timestamp
+	 * @param string $timestamp The timestamp to convert.
 	 * @return string
 	 */
 	private function convert_timestamp( $timestamp = '' ) {
@@ -122,5 +132,25 @@ class Stats {
 		$products = $this->get_product_count();
 
 		return $results->earnings / $products;
+	}
+
+	/**
+	 * Gets the number of product categories on the website.
+	 *
+	 * @since 3.2.10
+	 * @return int
+	 */
+	private function get_category_count() {
+		return wp_count_terms( 'download_category' );
+	}
+
+	/**
+	 * Gets the number of product tags on the website.
+	 *
+	 * @since 3.2.10
+	 * @return int
+	 */
+	private function get_tag_count() {
+		return wp_count_terms( 'download_tag' );
 	}
 }

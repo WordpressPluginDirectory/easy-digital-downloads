@@ -7,10 +7,17 @@
  * @license   GPL2+
  * @since     3.2.0
  */
+
 namespace EDD\Telemetry;
 
+// Exit if accessed directly.
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Class Products
+ *
+ * @since 3.2.0
+ */
 class Products {
 
 	/**
@@ -49,6 +56,22 @@ class Products {
 				)
 			),
 		);
+
+		foreach ( edd_get_download_types() as $slug => $label ) {
+			$query = array(
+				'key' => '_edd_product_type',
+			);
+
+			if ( empty( $slug ) ) {
+				$query['compare'] = 'NOT EXISTS';
+			} else {
+				$query['value']   = $slug;
+				$query['compare'] = '=';
+			}
+
+			$slug                             = empty( $slug ) ? 'default' : $slug;
+			$data[ 'download_type_' . $slug ] = $this->get_product_count( $query );
+		}
 
 		/**
 		 * Filters the product data to send to the telemetry server.

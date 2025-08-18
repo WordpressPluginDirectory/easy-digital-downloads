@@ -26,17 +26,21 @@ function edd_process_download() {
 		$_GET['download_id'] = $_GET['download'];
 	}
 
-	$args = apply_filters( 'edd_process_download_args', array(
-		'download' => ( isset( $_GET['download_id'] ) )  ? (int) $_GET['download_id']                       : '',
-		'email'    => ( isset( $_GET['email'] ) )        ? rawurldecode( $_GET['email'] )                   : '',
-		'expire'   => ( isset( $_GET['expire'] ) )       ? rawurldecode( $_GET['expire'] )                  : '',
-		'file_key' => ( isset( $_GET['file'] ) )         ? (int) $_GET['file']                              : '',
-		'price_id' => ( isset( $_GET['price_id'] ) )     ? (int) $_GET['price_id']                          : false,
-		'key'      => ( isset( $_GET['download_key'] ) ) ? $_GET['download_key']                            : '',
-		'eddfile'  => ( isset( $_GET['eddfile'] ) )      ? $_GET['eddfile']                                 : '',
-		'ttl'      => ( isset( $_GET['ttl'] ) )          ? $_GET['ttl']                                     : '',
-		'token'    => ( isset( $_GET['token'] ) )        ? $_GET['token']                                   : ''
-	) );
+	$args = apply_filters(
+		'edd_process_download_args',
+		array(
+			'download' => ( isset( $_GET['download_id'] ) ) ? (int) $_GET['download_id'] : '',
+			'email'    => ( isset( $_GET['email'] ) ) ? rawurldecode( $_GET['email'] ) : '',
+			'expire'   => ( isset( $_GET['expire'] ) ) ? rawurldecode( $_GET['expire'] ) : '',
+			'file_key' => ( isset( $_GET['file'] ) ) ? (int) $_GET['file'] : '',
+			'price_id' => ( isset( $_GET['price_id'] ) ) ? (int) $_GET['price_id'] : false,
+			'key'      => ( isset( $_GET['download_key'] ) ) ? $_GET['download_key'] : '',
+			'eddfile'  => ( isset( $_GET['eddfile'] ) ) ? $_GET['eddfile'] : '',
+			'ttl'      => ( isset( $_GET['ttl'] ) ) ? $_GET['ttl'] : '',
+			'token'    => ( isset( $_GET['token'] ) ) ? $_GET['token'] : '',
+			'oiid'     => ( isset( $_GET['oiid'] ) ) ? (int) $_GET['oiid'] : '',
+		)
+	);
 
 	if ( ! empty( $args['eddfile'] ) && ! empty( $args['ttl'] ) && ! empty( $args['token'] ) ) {
 
@@ -119,8 +123,8 @@ function edd_process_download() {
 					$attached_file = get_attached_file( $attachment_id, false );
 				}
 
-				// Confirm the file exists
-				if ( ! file_exists( $attached_file ) ) {
+				// Confirm the file exists.
+				if ( ! file_exists( EDD\Utils\FileSystem::sanitize_file_path( $attached_file ) ) ) {
 					$attached_file = false;
 				}
 			}
@@ -131,8 +135,20 @@ function edd_process_download() {
 			}
 		}
 
-		// Allow the file to be altered before any headers are sent
+		/**
+		 * Filter the requested file before it is processed
+		 *
+		 * @param string $requested_file The requested file.
+		 * @param array  $download_files The download files.
+		 * @param int    $file_key       The file key.
+		 * @param array  $args           The download arguments.
+		 */
 		$requested_file = apply_filters( 'edd_requested_file', $requested_file, $download_files, $args['file_key'], $args );
+
+		// Validate the file, since we just filtered it, we need to make sure it is still a local file.
+		if ( edd_is_local_file( $requested_file ) && ! EDD\Downloads\Process::validate( $requested_file ) ) {
+			wp_die( __( 'Error 104: Sorry, this file could not be downloaded.', 'easy-digital-downloads' ), __( 'Error Downloading File', 'easy-digital-downloads' ), 403 );
+		}
 
 		if ( 'x_sendfile' == $method && ( ! function_exists( 'apache_get_modules' ) || ! in_array( 'mod_xsendfile', apache_get_modules() ) ) ) {
 			// If X-Sendfile is selected but is not supported, fallback to Direct
@@ -147,7 +163,11 @@ function edd_process_download() {
 			wp_die( __( 'Error 103: Error downloading file. Please contact support.', 'easy-digital-downloads' ), __( 'File download error', 'easy-digital-downloads' ), 501 );
 		}
 
-		if ( ( ! isset( $file_details['scheme'] ) || ! in_array( $file_details['scheme'], $schemes ) ) && isset( $file_details['path'] ) && file_exists( $requested_file ) ) {
+		if (
+			( ! isset( $file_details['scheme'] ) || ! in_array( $file_details['scheme'], $schemes ) ) &&
+			isset( $file_details['path'] ) &&
+			file_exists( EDD\Utils\FileSystem::sanitize_file_path( $requested_file ) )
+		) {
 
 			/**
 			 * Download method is set to Redirect in settings but an absolute path was provided
@@ -210,7 +230,11 @@ function edd_process_download() {
 				$direct    = false;
 				$file_path = $requested_file;
 
-				if ( ( ! isset( $file_details['scheme'] ) || ! in_array( $file_details['scheme'], $schemes ) ) && isset( $file_details['path'] ) && file_exists( $requested_file ) ) {
+				if (
+					( ! isset( $file_details['scheme'] ) || ! in_array( $file_details['scheme'], $schemes ) ) &&
+					isset( $file_details['path'] ) &&
+					file_exists( EDD\Utils\FileSystem::sanitize_file_path( $requested_file ) )
+				) {
 
 					/** This is an absolute path */
 					$direct    = true;
@@ -239,8 +263,13 @@ function edd_process_download() {
 					$direct    = true;
 				}
 
-				// Set the file size header
-				header( "Content-Length: " . @filesize( $file_path ) );
+				// Check the filesize so we can either switch the download method or set the header.
+				$file_size = filesize( EDD\Utils\FileSystem::sanitize_file_path( $file_path ) );
+				if ( ! empty( $file_size ) ) {
+					header( "Content-Length: " . $file_size );
+				} else {
+					$direct = false;
+				}
 
 				// Now deliver the file based on the kind of software the server is running / has enabled
 				if ( stristr( getenv( 'SERVER_SOFTWARE' ), 'lighttpd' ) ) {
@@ -318,14 +347,15 @@ function edd_deliver_download( $file = '', $redirect = false ) {
 		// Set a transient to ensure this symlink is not deleted before it can be used
 		set_transient( md5( $file_name ), '1', 30 );
 
-		// Schedule deletion of the symlink
-		if ( ! wp_next_scheduled( 'edd_cleanup_file_symlinks' ) ) {
-			wp_schedule_single_event( current_time( 'timestamp' ) + 60, 'edd_cleanup_file_symlinks' );
-		}
+		// Schedule deletion of the symlink.
+		\EDD\Cron\Events\SingleEvent::add(
+			time() + ( 60 * 60 ),
+			'edd_cleanup_file_symlinks'
+		);
 
 		// Make sure the symlink doesn't already exist before we create it
-		if( ! file_exists( $path ) ) {
-			$link = @symlink( realpath( $file ), $path );
+		if ( ! file_exists( EDD\Utils\FileSystem::sanitize_file_path( $path ) ) ) {
+			$link = EDD\Utils\FileSystem::symlink( realpath( $file ), $path );
 		} else {
 			$link = true;
 		}
@@ -762,6 +792,11 @@ function edd_get_file_ctype( $extension ) {
  * @return   bool|string        If string, $status || $cnt
  */
 function edd_readfile_chunked( $file, $retbytes = true ) {
+
+	if ( ! \EDD\Downloads\Process::validate( $file ) ) {
+		return false;
+	}
+
 	while ( ob_get_level() > 0 ) {
 		ob_end_clean();
 	}
@@ -776,9 +811,10 @@ function edd_readfile_chunked( $file, $retbytes = true ) {
 	$chunksize = 1024 * 1024;
 	$buffer    = '';
 	$cnt       = 0;
-	$handle    = @fopen( $file, 'r' );
+	$handle    = EDD\Utils\FileSystem::fopen( $file, 'r' );
 
-	if ( $size = @filesize( $file ) ) {
+	$size = @filesize( EDD\Utils\FileSystem::sanitize_file_path( $file ) );
+	if ( ! empty( $size ) ) {
 		header( "Content-Length: " . $size );
 	}
 
@@ -919,12 +955,18 @@ function edd_process_signed_download_url( $args ) {
 	$args['email']    = $order->email;
 	$args['key']      = $order->payment_key;
 
-	// Access is granted if there's at least one `complete` order item that matches the order + download + price ID.
-	$args['has_access'] = edd_order_grants_access_to_download_files( array(
-		'order_id'   => $order->id,
-		'product_id' => $args['download'],
-		'price_id'   => $args['price_id'],
-	) );
+	if ( 'refund' === $order->type ) {
+		$args['has_access'] = false;
+	} else {
+		// Access is granted if there's at least one `complete` order item that matches the order + download + price ID.
+		$args['has_access'] = edd_order_grants_access_to_download_files(
+			array(
+				'order_id'   => $order->id,
+				'product_id' => $args['download'],
+				'price_id'   => $args['price_id'],
+			)
+		);
+	}
 
 	return $args;
 }
@@ -941,9 +983,13 @@ function edd_process_signed_download_url( $args ) {
  */
 function edd_order_grants_access_to_download_files( $args ) {
 	$args = wp_parse_args( $args, array(
-		'order_id'   => 0,
-		'product_id' => 0,
-		'price_id'   => null,
+		'order_id'          => 0,
+		'product_id'        => 0,
+		'price_id'          => null,
+		'quantity__compare' => array(
+			'value'   => 0,
+			'compare' => '>',
+		),
 	) );
 
 	// Order and product IDs are required.

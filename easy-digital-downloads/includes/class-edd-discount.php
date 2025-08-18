@@ -373,6 +373,7 @@ class EDD_Discount extends Adjustment {
 					return 'global' === $this->scope ? false : true;
 			}
 
+			/* translators: %s: discount property name */
 			return new WP_Error( 'edd-discount-invalid-property', sprintf( __( 'Can\'t get property %s', 'easy-digital-downloads' ), $key ) );
 		}
 	}
@@ -1403,6 +1404,7 @@ class EDD_Discount extends Adjustment {
 		if ( (float) $cart_amount >= (float) $this->min_charge_amount ) {
 			$return = true;
 		} elseif ( $set_error ) {
+			/* translators: %s: Minimum order amount, formatted for the currency */
 			edd_set_error( 'edd-discount-error', sprintf( __( 'Minimum order of %s not met.', 'easy-digital-downloads' ), edd_currency_filter( edd_format_amount( $this->min_charge_amount ) ) ) );
 		}
 
@@ -1660,18 +1662,7 @@ class EDD_Discount extends Adjustment {
 		$user   = trim( $user );
 
 		if ( edd_get_cart_contents() && $this->id ) {
-			if (
-				! $this->is_archived( $set_error ) &&
-				$this->is_started( $set_error ) &&
-				$this->is_active( true, $set_error ) &&
-				! $this->is_maxed_out( $set_error ) &&
-				! $this->is_used( $user, $set_error ) &&
-				$this->is_product_requirements_met( $set_error ) &&
-				$this->is_min_price_met( $set_error ) &&
-				$this->is_valid_for_categories( $set_error )
-			) {
-				$return = true;
-			}
+			$return = $this->is_valid_for_conditions( $user, $set_error );
 		} elseif ( $set_error ) {
 			edd_set_error( 'edd-discount-error', _x( 'This discount is invalid.', 'error for when a discount is invalid based on its configuration', 'easy-digital-downloads' ) );
 		}
@@ -1769,7 +1760,7 @@ class EDD_Discount extends Adjustment {
 				$amount = 0;
 			}
 		} else {
-			// Percentage discount
+			// Percentage discount.
 			$amount = $base_price - ( $base_price * ( floatval( $this->amount ) / 100 ) );
 		}
 
@@ -1783,6 +1774,32 @@ class EDD_Discount extends Adjustment {
 		 * @param EDD_Discount $this Discount object.
 		 */
 		return apply_filters( 'edd_discounted_amount', $amount, $this );
+	}
+
+	/**
+	 * Get the applied discount amount.
+	 *
+	 * This differs from the discounted amount in that it does not apply the discount to the item.
+	 * It only returns how much the discount should apply to the item.
+	 *
+	 * @since 3.4.0
+	 * @param  float $base_price The base price of the item.
+	 * @return float The applied discount amount.
+	 */
+	public function get_applied_discount_amount( $base_price ) {
+		$base_price = floatval( $base_price );
+
+		if ( 'flat' === $this->amount_type ) {
+			$applied_amount = $this->amount;
+
+			if ( $applied_amount < 0 ) {
+				$applied_amount = 0;
+			}
+		} else {
+			$applied_amount = $base_price * ( floatval( $this->amount ) / 100 );
+		}
+
+		return apply_filters( 'edd_applied_discount_amount', floatval( $applied_amount ), $this );
 	}
 
 	/**
@@ -1872,9 +1889,9 @@ class EDD_Discount extends Adjustment {
 		return esc_url(
 			edd_get_admin_url(
 				array(
-					'page'       => 'edd-discounts',
-					'edd-action' => 'edit_discount',
-					'discount'   => absint( $this->id ),
+					'page'     => 'edd-discounts',
+					'view    ' => 'edit_discount',
+					'discount' => absint( $this->id ),
 				)
 			)
 		);
@@ -2039,5 +2056,38 @@ class EDD_Discount extends Adjustment {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Checks if the discount is valid for the conditions.
+	 *
+	 * @since 3.3.6
+	 * @param string $user      User info.
+	 * @param bool   $set_error Whether to set an error message.
+	 * @return bool
+	 */
+	private function is_valid_for_conditions( $user, $set_error = true ) {
+		if ( $this->is_archived( $set_error ) ) {
+			return false;
+		}
+		if ( ! $this->is_started( $set_error ) ) {
+			return false;
+		}
+		if ( ! $this->is_active( true, $set_error ) ) {
+			return false;
+		}
+		if ( $this->is_maxed_out( $set_error ) ) {
+			return false;
+		}
+		if ( $this->is_used( $user, $set_error ) ) {
+			return false;
+		}
+		if ( ! $this->is_min_price_met( $set_error ) ) {
+			return false;
+		}
+		if ( ! $this->is_product_requirements_met( $set_error ) || ! count( array_filter( $this->get_product_reqs() ) ) && ! $this->is_valid_for_categories( $set_error ) ) {
+			return false;
+		}
+		return true;
 	}
 }

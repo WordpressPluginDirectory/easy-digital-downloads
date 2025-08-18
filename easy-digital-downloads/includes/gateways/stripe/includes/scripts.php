@@ -5,6 +5,7 @@
  *
  * The Stripe JS is by default, loaded on every page as suggested by Stripe. This can be overridden by using the Restrict Stripe Assets
  * setting within the admin, and the Stripe Javascript resources will only be loaded when necessary.
+ *
  * @link https://stripe.com/docs/web/setup
  *
  * The custom Javascript for EDD is loaded if the page is checkout. If checkout, the function is called directly with
@@ -18,10 +19,13 @@
  *                                 the context of checkout, such as the card management or update subscription payment method
  *                                 UIs. Sending in 'true' will ensure that the Javascript resources are enqueued when you need them.
  *
- *
  * @return      void
  */
 function edd_stripe_js( $force_load_scripts = false ) {
+	if ( wp_script_is( 'edd-stripe-js', 'enqueued' ) ) {
+		return;
+	}
+
 	if ( false === edds_is_gateway_active() ) {
 		return;
 	}
@@ -50,6 +54,7 @@ function edd_stripe_js( $force_load_scripts = false ) {
 			'sandhills-stripe-js-v3',
 			'jquery',
 			'edd-ajax',
+			'wp-dom-ready',
 		);
 
 		// But if the user has Card Elements, we need to load that instead.
@@ -75,9 +80,7 @@ function edd_stripe_js( $force_load_scripts = false ) {
 			'elementsMode'                   => $elements_mode,
 			'is_ajaxed'                      => edd_is_ajax_enabled() ? 'true' : 'false',
 			'currency'                       => edd_get_currency(),
-			// @todo Replace with country code derived from Stripe Account information if available.
-			// @link https://github.com/easydigitaldownloads/edd-stripe/issues/654
-			'country'                        => edd_get_option( 'base_country', 'US' ),
+			'country'                        => strtoupper( edd_stripe()->connect() ? edd_stripe()->connect->get_connect_country() : edd_get_option( 'base_country', 'US' ) ),
 			'locale'                         => edds_get_stripe_checkout_locale(),
 			'is_zero_decimal'                => edds_is_zero_decimal_currency() ? 'true' : 'false',
 			'checkout'                       => edd_get_option( 'stripe_checkout' ) ? 'true' : 'false',
@@ -106,7 +109,6 @@ function edd_stripe_js( $force_load_scripts = false ) {
 		);
 
 		wp_localize_script( 'edd-stripe-js', 'edd_stripe_vars', $stripe_vars );
-
 	}
 }
 add_action( 'wp_enqueue_scripts', 'edd_stripe_js', 100 );
@@ -163,7 +165,7 @@ function edd_stripe_connect_admin_script( $hook ) {
 
 	edd_stripe_connect_admin_style();
 
-	wp_enqueue_script( 'edd-stripe-admin-scripts', EDD_PLUGIN_URL . 'assets/js/stripe-admin.js', array( 'jquery' ), EDD_VERSION, true );
+	wp_enqueue_script( 'edd-stripe-admin-scripts', EDD_PLUGIN_URL . 'assets/js/stripe-admin.js', array( 'jquery', 'wp-dom-ready' ), EDD_VERSION, true );
 
 	$test_key = edd_get_option( 'test_publishable_key' );
 	$live_key = edd_get_option( 'live_publishable_key' );
